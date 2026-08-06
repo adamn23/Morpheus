@@ -10,7 +10,7 @@ pre-registration, an adaptive bandit, calibration, M1 eye tracking, and
 reference validation are all built.
 
 Two milestones are built but **cannot run yet**. M4 needs a reference EEG device
-you may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
+the user may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
 raises at construction without it. That lock has no override see
 `cue/sensor_timing.py` for why.
 
