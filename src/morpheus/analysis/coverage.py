@@ -51,7 +51,8 @@ class CoverageReport:
     median_interocular_px: Optional[float]
 
     flag_seconds: dict[str, int] = field(default_factory=dict)
-    posture_seconds: dict[str, int] = field(default_factory=dict)
+    posture_seconds: dict[str, float] = field(default_factory=dict)
+    roll_seconds: dict[str, float] = field(default_factory=dict)
     scene_change_events: int = 0
 
     @property
@@ -117,24 +118,55 @@ def analyse_session(conn: sqlite3.Connection, session_id: int) -> CoverageReport
         )
     }
 
-    # Posture buckets over seconds where a face was seen at all. The thresholds
-    # mirror CoverageConfig.max_abs_yaw_proxy so the buckets and the gate agree.
-    posture = {
-        row["bucket"]: row["n"]
-        for row in conn.execute(
-            """
-            SELECT CASE
-                     WHEN yaw_proxy IS NULL       THEN 'no_face'
-                     WHEN ABS(yaw_proxy) <= 0.15  THEN 'frontal'
-                     WHEN ABS(yaw_proxy) <= 0.35  THEN 'moderate_turn'
-                     ELSE 'turned_away'
-                   END AS bucket,
-                   COUNT(*) AS n
-            FROM frames_1hz WHERE session_id = ? GROUP BY bucket ORDER BY n DESC
-            """,
-            (session_id,),
-        )
-    }
+    # Posture is weighted by face_present rather than counted per second.
+    #
+    # Counting seconds overstates badly, and did so in a way that produced two
+    # mutually contradictory tables in the same report: a second in which the
+    # face was visible for 200ms has a non-NULL yaw_proxy and would be counted
+    # as a full second of "frontal", while the coverage table — which uses the
+    # modal flag — correctly called the same second face_absent. Weighting by
+    # the visible fraction makes this table sum to the recorded duration and
+    # agree with the headline number.
+    posture: dict[str, float] = {}
+    for row in conn.execute(
+        """
+        SELECT CASE
+                 WHEN ABS(yaw_proxy) <= 0.15  THEN 'frontal'
+                 WHEN ABS(yaw_proxy) <= 0.35  THEN 'moderate_turn'
+                 ELSE 'turned_away'
+               END AS bucket,
+               SUM(face_present) AS visible
+        FROM frames_1hz WHERE session_id = ? AND yaw_proxy IS NOT NULL
+        GROUP BY bucket
+        """,
+        (session_id,),
+    ):
+        posture[row["bucket"]] = float(row["visible"] or 0.0)
+    seconds_total = int(agg["seconds"] or 0)
+    posture["no_face"] = max(0.0, seconds_total - sum(posture.values()))
+
+    # Head roll, over face-visible time. This is the single most diagnostic
+    # section for a side sleeper: a camera mounted upright sees a side-lying
+    # face rotated toward 90 degrees, and general-purpose face detectors are
+    # trained overwhelmingly on upright faces. An absence of high-roll
+    # detections — as opposed to a spread across roll — is the signature of the
+    # detector failing on rotated faces rather than of the head being upright.
+    roll: dict[str, float] = {}
+    for row in conn.execute(
+        """
+        SELECT CASE
+                 WHEN ABS(roll_deg) < 20 THEN 'upright (<20 deg)'
+                 WHEN ABS(roll_deg) < 45 THEN 'tilted (20-45)'
+                 WHEN ABS(roll_deg) < 70 THEN 'strong tilt (45-70)'
+                 ELSE 'sideways (>70)'
+               END AS bucket,
+               SUM(face_present) AS visible
+        FROM frames_1hz WHERE session_id = ? AND roll_deg IS NOT NULL
+        GROUP BY bucket
+        """,
+        (session_id,),
+    ):
+        roll[row["bucket"]] = float(row["visible"] or 0.0)
 
     interocular = conn.execute(
         "SELECT interocular_px FROM frames_1hz "
@@ -182,6 +214,7 @@ def analyse_session(conn: sqlite3.Connection, session_id: int) -> CoverageReport
         median_interocular_px=median_io,
         flag_seconds=flags,
         posture_seconds=posture,
+        roll_seconds=roll,
         scene_change_events=int(scene_changes),
     )
 
@@ -238,10 +271,32 @@ def format_report(r: CoverageReport) -> str:
         add(f"  {flag:<20} {n:>8,}  {n / total * 100:5.1f}%")
     add("")
 
-    add("Posture (seconds)")
+    add("Head turn (seconds of face-visible time)")
     add("-" * 72)
     for bucket, n in sorted(r.posture_seconds.items(), key=lambda kv: -kv[1]):
-        add(f"  {bucket:<20} {n:>8,}  {n / total * 100:5.1f}%")
+        add(f"  {bucket:<20} {n:>8.1f}  {n / total * 100:5.1f}%")
+    add("")
+
+    add("Head roll (seconds of face-visible time)")
+    add("-" * 72)
+    if r.roll_seconds:
+        for bucket, n in sorted(r.roll_seconds.items(), key=lambda kv: -kv[1]):
+            add(f"  {bucket:<20} {n:>8.1f}  {n / total * 100:5.1f}%")
+        upright = r.roll_seconds.get("upright (<20 deg)", 0.0)
+        visible = sum(r.roll_seconds.values())
+        if visible > 0 and upright / visible > 0.95:
+            add("")
+            for line in _wrap(
+                "Every detection was near-upright. If you were lying on your side, "
+                "that is not evidence your head was straight — it is the detector "
+                "failing on rotated faces, since it would otherwise report a spread "
+                "of roll angles. Try rotating the camera 90 degrees so a side-lying "
+                "face presents upright to it, and compare the coverage.",
+                68,
+            ):
+                add(f"  {line}")
+    else:
+        add("  (no face detected)")
     add("")
 
     add("DECISION GATE — eye-region usable coverage")
