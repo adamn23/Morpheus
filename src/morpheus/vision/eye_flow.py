@@ -14,6 +14,16 @@ the previous frame before any flow is computed, and the registration residual
 is recorded so windows where alignment failed can be discarded rather than
 believed.
 
+**Flow is measured as the coherent component, not the mean magnitude.** This
+cost a failed calibration to learn. Reporting `mean(|v|)` — the average of
+per-pixel flow magnitudes — lets sensor noise add constructively, because every
+pixel receives a random vector and magnitudes never cancel. On a static
+synthetic scene with realistic noise the shipped version reported 0.11 of flow
+where the true motion was exactly zero, and on real footage it produced a
+baseline of 0.2466 that buried a genuine saccade signal 1.6x above it. Measuring
+`|mean(v)|` instead makes incoherent noise cancel while coherent motion survives:
+signal-to-noise improves from 31x to 603x. See docs/m1-instrument-defect.md.
+
 **Bilateral correlation is the specificity feature.** Genuine eye movements are
 conjugate: both eyes move together, in the same direction, at the same time.
 Shadows, IR flicker, blanket motion, breathing sway and sensor noise are not
@@ -41,6 +51,10 @@ from .landmarks import (
 
 log = logging.getLogger("morpheus.eye_flow")
 
+# Registration shifts below this are not corrected: the interpolation cost
+# exceeds any real misalignment at that scale. See _register().
+MIN_REGISTRATION_SHIFT_PX = 0.3
+
 
 @dataclass
 class EyeFlowSample:
@@ -49,6 +63,12 @@ class EyeFlowSample:
     flow_left: Optional[float] = None
     flow_right: Optional[float] = None
     bilateral_corr: Optional[float] = None
+    # |mean(v)| / mean(|v|) in [0, 1]: how much of the measured motion is
+    # coherent. Near 1 for real movement, near 0 for pure sensor noise. Logged
+    # so that a noise-dominated night is identifiable after the fact rather
+    # than silently averaged into the results.
+    coherence_left: Optional[float] = None
+    coherence_right: Optional[float] = None
     lid_disp_left: Optional[float] = None
     lid_disp_right: Optional[float] = None
     residual_left: Optional[float] = None
@@ -74,7 +94,11 @@ class EyeFlowConfig:
     max_residual: float = 0.08
     # Flow magnitudes below this are noise at any realistic gain.
     flow_floor: float = 1e-4
-    equalize: bool = True
+    # Off by default. CLAHE lifts contrast in a dark eye region, but it amplifies
+    # sensor noise along with it — measured at roughly 2x the noise floor on a
+    # static scene. With coherent-flow measurement the contrast boost is not
+    # needed, and the extra noise is a straight loss.
+    equalize: bool = False
 
 
 class EyeFlowExtractor:
@@ -126,13 +150,15 @@ class EyeFlowExtractor:
                 continue
 
             flow = _dense_flow(aligned, roi)
-            magnitude = float(np.mean(np.linalg.norm(flow, axis=2)))
+            magnitude, coherence = _coherent_magnitude(flow)
             magnitude = magnitude if magnitude >= self._cfg.flow_floor else 0.0
             flows[side] = flow
             if side == "left":
                 sample.flow_left = magnitude
+                sample.coherence_left = coherence
             else:
                 sample.flow_right = magnitude
+                sample.coherence_right = coherence
 
         left_flow, right_flow = flows.get("left"), flows.get("right")
         if left_flow is not None and right_flow is not None:
@@ -198,6 +224,20 @@ def _register(previous: np.ndarray, current: np.ndarray) -> tuple[np.ndarray, fl
     except cv2.error:
         return previous, 1.0
 
+    # Skip the warp for negligible shifts. warpAffine interpolates, which
+    # low-pass filters the warped frame but not the one it is compared against,
+    # and Farnebäck reads that asymmetric smoothing as coherent flow. Measured
+    # on a static noisy scene it roughly doubled the noise floor (0.026 -> 0.066
+    # at sigma=2) while correcting a displacement of 0.03 px that was not real.
+    # Below a third of a pixel there is nothing to correct and only artefacts to
+    # introduce.
+    if float(np.hypot(shift_x, shift_y)) < MIN_REGISTRATION_SHIFT_PX:
+        margin = max(2, int(min(previous.shape) * 0.12))
+        inner_a = previous[margin:-margin, margin:-margin]
+        inner_b = current[margin:-margin, margin:-margin]
+        residual = float(np.mean(np.abs(inner_a - inner_b))) if inner_a.size else 1.0
+        return previous, residual
+
     matrix = np.array([[1.0, 0.0, shift_x], [0.0, 1.0, shift_y]], dtype=np.float32)
     aligned = cv2.warpAffine(
         previous, matrix, (previous.shape[1], previous.shape[0]),
@@ -224,6 +264,24 @@ def _dense_flow(previous: np.ndarray, current: np.ndarray) -> np.ndarray:
     )
     margin = max(2, int(min(flow.shape[:2]) * 0.12))
     return flow[margin:-margin, margin:-margin]
+
+
+def _coherent_magnitude(flow: np.ndarray) -> tuple[float, float]:
+    """Coherent flow magnitude, and the coherence ratio that qualifies it.
+
+    Returns (|mean(v)|, |mean(v)| / mean(|v|)).
+
+    The first is the measurement: how far the region moved as a whole. The
+    second says how much to trust it — a value near 1 means the pixels agreed on
+    a direction, near 0 means they disagreed and the magnitude is noise.
+    """
+    if flow.size == 0:
+        return 0.0, 0.0
+    vectors = flow.reshape(-1, 2)
+    coherent = float(np.linalg.norm(vectors.mean(axis=0)))
+    incoherent = float(np.mean(np.linalg.norm(vectors, axis=1)))
+    ratio = coherent / incoherent if incoherent > 1e-12 else 0.0
+    return coherent, float(np.clip(ratio, 0.0, 1.0))
 
 
 def _conjugate_correlation(left: np.ndarray, right: np.ndarray) -> Optional[float]:
