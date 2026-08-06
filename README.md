@@ -4,9 +4,9 @@ A local-first, single-user research platform for testing whether auditory cues
 can increase lucid-dream frequency and, just as importantly, for finding out
 honestly when they cannot.
 
-**Status: M0 (feasibility probe).** Morpheus currently records and reports. It
-does not play cues, detect anything, or claim anything. Audio arrives in M2,
-after the safety supervisor that constrains it.
+**Status: M2 (cueing).** Morpheus can now run a conditioning session, deliver
+audio cues overnight under hard safety limits, observe the response, and capture
+a morning report. It still does not detect REM, and does not claim to.
 
 The full design, including the evidence review that shaped it, is in
 [`docs/design.md`](docs/design.md). Read §1–§8 before the code; the architecture
@@ -80,11 +80,39 @@ relaunch, that is usually why.
 ## Use
 
 ```bash
+# Journalling — start here, tonight. No hardware needed.
+morpheus journal                 # this morning's dream report
+morpheus baseline                # lucid-dream rate over recent reports
+
+# Cueing
+morpheus cues --add-preset trained-ascending --trained
+morpheus cues --add-preset control-descending --no-trained
+morpheus cues --preview 1        # hear it at safe gain while awake
+morpheus train                   # conditioning protocol, before sleep or at WBTB
+morpheus night --dry-run         # decide and log cues, play no audio
+morpheus night                   # a real cueing night
+
+# Camera probe (M0)
 morpheus doctor                  # verify the rig before trusting it with a night
-morpheus record --hours 8        # record a session (features only, never video)
+morpheus record --hours 8        # features only, never video
 morpheus report                  # coverage analysis and decision-gate verdict
-morpheus sessions                # list recorded sessions
+morpheus sessions
 ```
+
+### The order that matters
+
+1. **Journal for two weeks first.** You need a pre-intervention baseline, and
+   dream recall itself improves with practice. Without this the N-of-1
+   comparison later has nothing to compare against.
+2. **Condition the cue** (`morpheus train`) — this is the part with published
+   efficacy. The sound is inert without it.
+3. **Run `--dry-run` first**, to see when cues *would* fire before any sound is
+   made in your bedroom.
+
+`morpheus night` defaults are deliberately conservative: no cue for the first
+5.5 hours, six per night maximum, two per hour, twenty-minute cooldown, a
+mandatory fade-in from silence, and a hard volume ceiling. It stops cueing for
+the night entirely on a possible awakening.
 
 `doctor` is not optional before the first overnight run. It checks three things
 that fail silently otherwise:
@@ -137,10 +165,30 @@ src/morpheus/
   config.py       typed config + snapshotting (provenance for every artifact)
   capture/        FrameSource protocol, live camera, file replay
   vision/         quality, presence, motion, 1 Hz aggregation
-  store/          SQLite schema, migrations, batched feature writes
-  runtime/        sleep prevention, the record loop, health accounting
+  store/          SQLite schema, migrations, batched writes
+  runtime/        sleep prevention, the record loop, the cueing night
   analysis/       the M0 coverage report
+  audio/          cue synthesis, hashed asset registry, ramped playback
+  cue/            safety supervisor, gate stack, state machine, policy
+  training/       the conditioning protocol
+  report/         morning report schema and store
 ```
+
+### How the cue path is layered
+
+From least to most authority — a cue happens only if every layer agrees, and any
+one of them can stop it alone:
+
+| Layer | Role |
+|---|---|
+| `cue/policy.py` | Proposes gain and timing. Knows nothing about limits. |
+| `cue/controller.py` | Gate stack: motion, quality, caps, cooldown, condition. |
+| `cue/safety.py` | Hard caps. Cannot be overridden by anything. |
+| `audio/player.py` | Clamps to the ceiling and forces a fade-in, in the buffer. |
+
+That separation is structural, not stylistic. When the adaptive layer arrives in
+M5 it slots in at the `Policy` seam, where it has no route to the safety limits —
+so a learner optimising for "cue noticed" cannot discover that louder is better.
 
 `FileReplaySource` matters more than its size suggests: it is what lets a
 detector change in M4 be re-run against every night recorded since M0. The
