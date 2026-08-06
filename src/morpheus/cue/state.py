@@ -42,6 +42,9 @@ class Gate(str, enum.Enum):
     G6_COOLDOWN = "g6_cooldown"
     G7_NIGHTLY_CAP = "g7_nightly_cap"
     G8_EXPERIMENT = "g8_experiment_condition"
+    # Present in the enum, but only ever evaluated when sensor timing has been
+    # authorised by a passing H1 validation. Absent from the stack otherwise.
+    G9_EYE_ACTIVITY = "g9_eye_activity"
 
 
 @dataclass

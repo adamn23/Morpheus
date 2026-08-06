@@ -27,6 +27,12 @@ from ..types import FeatureFrame
 from .outcome import OutcomeAssessment, OutcomeThresholds, classify_post_cue
 from .policy import Policy, ScheduledPolicy
 from .safety import Authorization, SafetySupervisor
+from .sensor_timing import (
+    ActivityIndex,
+    SensorTimingAuthorization,
+    SensorTimingConfig,
+    SensorTimingLocked,
+)
 from .state import CueCommand, CueState, Gate, GateResult, GateSnapshot, Outcome
 
 log = logging.getLogger("morpheus.cue")
@@ -78,11 +84,32 @@ class CueController:
         policy: Optional[Policy] = None,
         config: Optional[ControllerConfig] = None,
         condition_allows_cue: bool = True,
+        sensor_timing: Optional["SensorTimingConfig"] = None,
+        authorization: Optional["SensorTimingAuthorization"] = None,
     ) -> None:
         self._supervisor = supervisor
         self._policy = policy or ScheduledPolicy()
         self._cfg = config or ControllerConfig()
         self._condition_allows_cue = condition_allows_cue
+
+        # G9 is locked at construction, deliberately. This is a configuration
+        # error, so it should surface before the night starts rather than
+        # degrade silently at 04:00 — the opposite of the runtime rule. There is
+        # no override flag: the person who would reach for one is precisely the
+        # person the lock exists to protect (design.md §8).
+        self._sensor_timing = None
+        self._activity: Optional[ActivityIndex] = None
+        if sensor_timing is not None:
+            auth = authorization
+            if auth is None or not auth.authorized:
+                raise SensorTimingLocked(
+                    (auth.reason if auth else "no authorization supplied")
+                    + "\nSensor-timed cueing stays disabled until H1 passes. "
+                    "Scheduled cueing is unaffected and remains the evidence-backed arm."
+                )
+            self._sensor_timing = sensor_timing
+            self._activity = ActivityIndex(sensor_timing)
+            log.info("sensor-timed cueing ENABLED — %s", auth.reason)
 
         self._state = CueState.IDLE
         self._history: list[FeatureFrame] = []
@@ -284,6 +311,23 @@ class CueController:
                 detail="condition permits" if self._condition_allows_cue else "no-cue condition",
             )
         )
+
+        # G9 appears in the stack only when sensor timing is authorised. In
+        # scheduled mode it is absent rather than auto-passing, so a gate
+        # snapshot always shows honestly whether eye activity had any say.
+        if self._sensor_timing is not None and self._activity is not None:
+            burst = self._activity.update(
+                frame.eye_flow_bilateral_corr, frame.eye_region_usable, frame.t_mono
+            )
+            results.append(
+                GateResult(
+                    Gate.G9_EYE_ACTIVITY,
+                    passed=burst,
+                    detail="sustained bilateral eye activity" if burst else "no qualifying burst",
+                    value=frame.eye_flow_bilateral_corr,
+                )
+            )
+
         return GateSnapshot(results)
 
     # -------------------------------------------------------------- internals
@@ -342,6 +386,10 @@ class CueController:
         before = [f for f in self._history if cue_t - th.baseline_window_s <= f.t_mono < cue_t]
         after = [f for f in self._history if cue_t <= f.t_mono <= cue_t + th.observe_window_s]
         return classify_post_cue(cue_t_mono=cue_t, before=before, after=after, thresholds=th)
+
+    @property
+    def sensor_timing_active(self) -> bool:
+        return self._sensor_timing is not None
 
     def _remember(self, frame: FeatureFrame) -> None:
         self._history.append(frame)
