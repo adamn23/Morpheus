@@ -20,6 +20,10 @@ def config(tmp_path: Path) -> MorpheusConfig:
     cfg = MorpheusConfig()
     cfg.storage.data_dir = tmp_path
     cfg.camera.require_manual_exposure = False
+    # M1 off by default in tests. It is exercised deliberately in
+    # test_eye_tracking.py; everywhere else it is dead weight that would load a
+    # 3.7 MB model per pipeline construction.
+    cfg.eye.enabled = False
     return cfg
 
 
