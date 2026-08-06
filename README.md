@@ -4,9 +4,10 @@ A local-first, single-user research platform for testing whether auditory cues
 can increase lucid-dream frequency and, just as importantly, for finding out
 honestly when they cannot.
 
-**Status: M6 (complete, partly gated).** Conditioning, overnight cueing under
-hard safety limits, morning reports, a blinded randomized N-of-1 harness with
-pre-registration, an adaptive bandit, and reference validation are all built.
+**Status: M0-M6 built, partly gated.** Conditioning, overnight cueing under hard
+safety limits, morning reports, a blinded randomized N-of-1 harness with
+pre-registration, an adaptive bandit, calibration, M1 eye tracking, and
+reference validation are all built.
 
 Two milestones are built but **cannot run yet**. M4 needs a reference EEG device
 you may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
@@ -68,6 +69,22 @@ The decision gate was fixed in the design document before any data existed:
 | 15–25% | MARGINAL | Collect more nights. Do not tune the thresholds |
 | < 15% | FAIL | Abandon the eye branch; camera becomes a motion guard only |
 
+## M1: the positive-control gate
+
+`morpheus calibrate` runs a second, harder gate. It compares **deliberate
+closed-eye eye movements against closed-eye stillness**, in one session, and
+requires **AUC ≥ 0.80**.
+
+That bar is deliberately soft for a deliberately easy task. You are awake,
+cooperative, well lit, frontal, close to the camera, holding your head still,
+and making the largest eye movements you can. Every one of those conditions is
+better than what a sleeping face offers. Missing 0.80 does not mean the
+thresholds need tuning — it means the signal is not there, and the branch ends.
+
+The profile also reports **head-turn leakage**. If head turns separate from
+baseline about as well as saccades do, the index is tracking your head rather
+than your eyes, and a passing AUC means nothing.
+
 A FAIL is a real result, not a setback. It costs two weeks instead of four
 months, and it is the outcome the design considers most likely for a side
 sleeper.
@@ -99,8 +116,10 @@ morpheus train                   # conditioning protocol, before sleep or at WBT
 morpheus night --dry-run         # decide and log cues, play no audio
 morpheus night                   # a real cueing night
 
-# Camera probe (M0)
+# Camera probe and calibration (M0-M1)
 morpheus doctor                  # verify the rig before trusting it with a night
+morpheus calibrate               # guided ~15 min session; the H1 positive control
+morpheus calibrate --audio       # ascending-limits loudness calibration
 morpheus record --hours 8        # features only, never video
 morpheus report                  # coverage analysis and decision-gate verdict
 morpheus sessions
