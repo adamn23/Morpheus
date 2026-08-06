@@ -24,6 +24,14 @@ YUNET_URL = (
     "models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 )
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+FACE_LANDMARKER_FILENAME = "face_landmarker.task"
+FACE_LANDMARKER_URL = (
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+    "face_landmarker/float16/1/face_landmarker.task"
+)
+FACE_LANDMARKER_SHA256 = (
+    "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
+)
 
 
 class CameraConfig(BaseModel):
@@ -127,6 +135,24 @@ class CoverageConfig(BaseModel):
     min_detector_confidence: float = 0.6
 
 
+class EyeTrackingConfig(BaseModel):
+    """M1 eye-movement features. Shadow mode only.
+
+    `enabled` defaults to True because computing and logging the index costs a
+    little CPU and buys the data H1 needs. It does not default to *influencing*
+    anything: G9 is locked behind a passing validation regardless of this flag
+    (design.md §8), so turning this on records the signal without acting on it.
+    """
+
+    enabled: bool = True
+    landmark_model: Path = DEFAULT_MODEL_DIR / FACE_LANDMARKER_FILENAME
+    landmark_hz: float = 10.0
+    min_landmark_confidence: float = 0.3
+    roi_scale: float = 0.22
+    max_registration_residual: float = 0.08
+    equalize_roi: bool = True
+
+
 class StorageConfig(BaseModel):
     data_dir: Path = DEFAULT_DATA_DIR
     db_filename: str = "morpheus.db"
@@ -154,6 +180,7 @@ class MorpheusConfig(BaseModel):
     presence: PresenceConfig = Field(default_factory=PresenceConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
     coverage: CoverageConfig = Field(default_factory=CoverageConfig)
+    eye: EyeTrackingConfig = Field(default_factory=EyeTrackingConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     recorder: RecorderConfig = Field(default_factory=RecorderConfig)
 

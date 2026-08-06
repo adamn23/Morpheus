@@ -140,6 +140,11 @@ class RawSample:
     # ones, or `face_present` becomes a fraction of the detector's cadence
     # rather than a fraction of the second.
     presence_fresh: bool = True
+    # M1 shadow-mode measurements. `eye` is None whenever the eye region could
+    # not be measured, which is the common case and is not an error.
+    eye: object = None
+    landmarks_dense: Optional[bool] = None
+    pitch: Optional[float] = None
 
 
 @dataclass(slots=True)
