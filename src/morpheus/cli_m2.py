@@ -671,8 +671,13 @@ def calibrate(
     show: bool = typer.Option(False, help="Show the most recent calibration profile."),
     device: Optional[str] = typer.Option(None, help="Camera device index or path."),
     allow_auto_exposure: bool = typer.Option(False, help="Daylight development only."),
+    stage: str = typer.Option(
+        "signal",
+        help="'signal' (desk, the H1 test), 'posture' (bed, needs the overnight "
+        "mount), or 'all'.",
+    ),
     segments: Optional[str] = typer.Option(
-        None, help="Comma-separated segment keys to run. Default: all."
+        None, help="Comma-separated segment keys, overriding --stage."
     ),
     config_path: Optional[Path] = typer.Option(None, "--config"),
 ) -> None:
@@ -687,7 +692,13 @@ def calibrate(
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     from .calibration.profile import build_profile, format_profile, latest
     from .calibration.profile import save as save_profile
-    from .calibration.protocol import PROTOCOL, SEGMENTS_BY_KEY, total_seconds
+    from .calibration.protocol import (
+        SEGMENTS_BY_KEY,
+        STAGE_GUIDANCE,
+        STAGES,
+        segments_for,
+        stage_seconds,
+    )
     from .calibration.runner import CalibrationRunner
 
     config = MorpheusConfig.load(config_path)
@@ -717,7 +728,6 @@ def calibrate(
         config.camera.require_manual_exposure = False
     config.eye.enabled = True
 
-    chosen = PROTOCOL
     if segments:
         keys = [k.strip() for k in segments.split(",") if k.strip()]
         unknown = [k for k in keys if k not in SEGMENTS_BY_KEY]
@@ -725,6 +735,13 @@ def calibrate(
             typer.secho(f"unknown segments: {unknown}", fg=typer.colors.RED)
             raise typer.Exit(1)
         chosen = tuple(SEGMENTS_BY_KEY[k] for k in keys)
+        duration = sum(s.seconds for s in chosen)
+    else:
+        if stage not in STAGES:
+            typer.secho(f"unknown stage {stage!r}; try: {', '.join(STAGES)}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        chosen = segments_for(stage)
+        duration = stage_seconds(stage)
 
     source = WebcamSource(config.camera)
     try:
@@ -737,9 +754,22 @@ def calibrate(
         raise typer.Exit(1)
 
     runner = CalibrationRunner(config, source)
-    typer.echo(f"\nMorpheus calibration — {len(chosen)} segments, "
-               f"about {total_seconds() // 60} min")
+    typer.echo(f"\nMorpheus calibration — stage '{stage}', {len(chosen)} segments, "
+               f"about {duration // 60}m{duration % 60:02d}s")
     typer.echo("=" * 68)
+    for line in _wrap(STAGE_GUIDANCE.get(stage, ""), 66):
+        typer.echo(f"  {line}")
+    typer.echo("")
+    if stage == "posture":
+        typer.secho(
+            "  These segments only mean anything from the camera's real overnight\n"
+            "  mount. Running them from a desk measures a situation that will never\n"
+            "  occur, and will report implausibly good visibility.",
+            fg=typer.colors.YELLOW,
+        )
+        if not typer.confirm("  Is the camera in its final overnight position?", default=False):
+            typer.echo("  Mount it first, then run this again.")
+            raise typer.Exit(1)
 
     def before(segment) -> bool:
         typer.echo("")

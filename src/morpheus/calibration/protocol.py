@@ -24,6 +24,28 @@ from dataclasses import dataclass
 from enum import Enum
 
 
+class SegmentSetup(str, Enum):
+    """Where the camera has to be for a segment to mean anything.
+
+    The protocol asks two questions that need two different rigs, and running
+    them together produces numbers that describe neither. This was found the
+    hard way: a first full run reported 98-99% eye availability for all four
+    sleep postures, which is not credible for a side sleeper and was an artefact
+    of performing "lie on your left side" in front of a laptop on a desk.
+
+    DESK segments ask whether the signal exists at all. They want you close,
+    frontal and well lit, because that is the upper bound the sleeping case is
+    measured against.
+
+    BED segments ask whether the eye region is visible where you actually sleep.
+    They mean nothing except from the camera's real overnight mount, at its real
+    distance, in its real lighting.
+    """
+
+    DESK = "desk"
+    BED = "bed"
+
+
 class SegmentRole(str, Enum):
     """What a segment contributes to the profile."""
 
@@ -38,6 +60,7 @@ class SegmentRole(str, Enum):
 class Segment:
     key: str
     role: SegmentRole
+    setup: SegmentSetup
     title: str
     instruction: str
     seconds: int
@@ -50,6 +73,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="eyes_closed_still",
         role=SegmentRole.BASELINE,
+        setup=SegmentSetup.DESK,
         title="Eyes closed, completely still",
         instruction=(
             "Close your eyes and hold as still as you can. Breathe normally. Try not "
@@ -61,6 +85,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="slow_saccades",
         role=SegmentRole.POSITIVE_CONTROL,
+        setup=SegmentSetup.DESK,
         title="Slow left-right eye movement, eyes closed",
         instruction=(
             "Keep your eyes closed and your head perfectly still. Move your eyes "
@@ -73,6 +98,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="fast_saccades",
         role=SegmentRole.POSITIVE_CONTROL,
+        setup=SegmentSetup.DESK,
         title="Fast left-right eye movement, eyes closed",
         instruction=(
             "Same again, but quickly — several movements per second. Head still. "
@@ -85,6 +111,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="blinks",
         role=SegmentRole.CONFOUND,
+        setup=SegmentSetup.DESK,
         title="Blinking",
         instruction=(
             "Eyes open, looking at the camera. Blink normally, roughly once every "
@@ -97,6 +124,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="facial_movement",
         role=SegmentRole.CONFOUND,
+        setup=SegmentSetup.DESK,
         title="Small facial movements",
         instruction=(
             "Eyes closed. Frown, smile slightly, twitch your nose, purse your lips. "
@@ -108,6 +136,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="head_turn",
         role=SegmentRole.CONFOUND,
+        setup=SegmentSetup.DESK,
         title="Slow head turn",
         instruction=(
             "Eyes closed and still behind the lids. Slowly turn your head left, then "
@@ -121,6 +150,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="posture_supine",
         role=SegmentRole.POSTURE,
+        setup=SegmentSetup.BED,
         title="Lie on your back",
         instruction=(
             "Lie down as you would to sleep, on your back, eyes closed. Get "
@@ -131,6 +161,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="posture_left",
         role=SegmentRole.POSTURE,
+        setup=SegmentSetup.BED,
         title="Lie on your left side",
         instruction="Roll onto your left side as you would to sleep. Eyes closed.",
         seconds=25,
@@ -138,6 +169,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="posture_right",
         role=SegmentRole.POSTURE,
+        setup=SegmentSetup.BED,
         title="Lie on your right side",
         instruction="Roll onto your right side as you would to sleep. Eyes closed.",
         seconds=25,
@@ -145,6 +177,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="posture_prone",
         role=SegmentRole.POSTURE,
+        setup=SegmentSetup.BED,
         title="Lie face down",
         instruction=(
             "Lie on your front, however you actually sleep. If your face ends up in "
@@ -156,6 +189,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="occlusion",
         role=SegmentRole.ROBUSTNESS,
+        setup=SegmentSetup.BED,
         title="Partial occlusion",
         instruction=(
             "Eyes closed. Pull the duvet up over part of your face, or rest an arm "
@@ -166,6 +200,7 @@ PROTOCOL: tuple[Segment, ...] = (
     Segment(
         key="leave_frame",
         role=SegmentRole.ROBUSTNESS,
+        setup=SegmentSetup.BED,
         title="Leave and return",
         instruction=(
             "Sit up, move out of the camera's view for a few seconds, then return "
@@ -176,6 +211,42 @@ PROTOCOL: tuple[Segment, ...] = (
 )
 
 SEGMENTS_BY_KEY = {segment.key: segment for segment in PROTOCOL}
+
+# The two halves normally run weeks apart: the signal test can be done today on
+# a laptop, while the posture test has to wait for the IR camera to be mounted.
+STAGES: dict[str, tuple[str, ...]] = {
+    "signal": tuple(s.key for s in PROTOCOL if s.setup is SegmentSetup.DESK),
+    "posture": tuple(s.key for s in PROTOCOL if s.setup is SegmentSetup.BED),
+    "all": tuple(s.key for s in PROTOCOL),
+}
+
+STAGE_GUIDANCE: dict[str, str] = {
+    "signal": (
+        "Sit at the camera, roughly arm's length, face on, in normal light. This "
+        "is the H1 positive control and it wants the most favourable conditions "
+        "you can give it, because the sleeping case only gets harder."
+    ),
+    "posture": (
+        "Put the camera exactly where it will sit overnight and do not move it "
+        "again. Lie in bed as you actually sleep. These numbers describe that "
+        "mount and no other, so a laptop on a desk will tell you nothing."
+    ),
+    "all": (
+        "Runs both stages. Only correct if the camera is already in its final "
+        "overnight position AND you can reach it to sit frontally, which is "
+        "unusual. Prefer running the stages separately."
+    ),
+}
+
+
+def segments_for(stage: str) -> tuple[Segment, ...]:
+    if stage not in STAGES:
+        raise KeyError(f"unknown stage {stage!r}; available: {sorted(STAGES)}")
+    return tuple(SEGMENTS_BY_KEY[k] for k in STAGES[stage])
+
+
+def stage_seconds(stage: str) -> int:
+    return sum(s.seconds for s in segments_for(stage))
 
 
 def total_seconds() -> int:
