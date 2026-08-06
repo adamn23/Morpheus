@@ -4,9 +4,16 @@ A local-first, single-user research platform for testing whether auditory cues
 can increase lucid-dream frequency and, just as importantly, for finding out
 honestly when they cannot.
 
-**Status: M2 (cueing).** Morpheus can now run a conditioning session, deliver
-audio cues overnight under hard safety limits, observe the response, and capture
-a morning report. It still does not detect REM, and does not claim to.
+**Status: M6 (complete, partly gated).** Conditioning, overnight cueing under
+hard safety limits, morning reports, a blinded randomized N-of-1 harness with
+pre-registration, an adaptive bandit, and reference validation are all built.
+
+Two milestones are built but **cannot run yet**. M4 needs a reference EEG device
+you may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
+raises at construction without it. That lock has no override — see
+`cue/sensor_timing.py` for why.
+
+Morpheus still does not detect REM, and does not claim to.
 
 The full design, including the evidence review that shaped it, is in
 [`docs/design.md`](docs/design.md). Read §1–§8 before the code; the architecture
@@ -97,6 +104,17 @@ morpheus doctor                  # verify the rig before trusting it with a nigh
 morpheus record --hours 8        # features only, never video
 morpheus report                  # coverage analysis and decision-gate verdict
 morpheus sessions
+
+# Experiment (M3)
+morpheus experiment --create pilot --design two-arm
+morpheus prereg --experiment 1   # required before collection can start
+morpheus experiment --start 1
+morpheus reveal                  # last night's arm, only after the report exists
+morpheus analyse                 # pre-registered Bayesian comparison
+
+# Validation and adaptation (M4-M6)
+morpheus validate hypnogram.csv --session 12   # H1 go/no-go
+morpheus adaptive                              # bandit posteriors
 ```
 
 ### The order that matters
