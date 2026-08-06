@@ -326,6 +326,42 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        4,
+        """
+        -- Waking calibration (design.md §13.1). The positive_control_auc column
+        -- is the M1 go/no-go: deliberate closed-eye saccades versus closed-eye
+        -- stillness, measured in one session on one face under one lighting.
+        CREATE TABLE calibration_profiles (
+            id                   INTEGER PRIMARY KEY,
+            created_at           TEXT    NOT NULL,
+            device_profile_id    INTEGER REFERENCES device_profiles(id),
+            positive_control_auc REAL,
+            head_turn_leakage    REAL,
+            baseline_median      REAL,
+            baseline_mad         REAL,
+            suggested_threshold  REAL,
+            passed               INTEGER NOT NULL DEFAULT 0,
+            segments_json        TEXT,
+            posture_json         TEXT,
+            notes_json           TEXT
+        );
+
+        -- Audio loudness calibration (design.md §13.3), by ascending limits.
+        -- Absolute SPL at the pillow is unknown without a meter, so these are
+        -- digital gains anchored to the user's own judgement.
+        CREATE TABLE audio_calibrations (
+            id             INTEGER PRIMARY KEY,
+            created_at     TEXT    NOT NULL,
+            cue_asset_id   INTEGER REFERENCES cue_assets(id),
+            faintest_gain  REAL,
+            comfortable_gain REAL,
+            ceiling_gain   REAL    NOT NULL,
+            output_device  TEXT,
+            notes          TEXT
+        );
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)
