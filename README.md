@@ -243,7 +243,3 @@ data gets.
   narratives (from M2) must never be routed through an external service.
 - Run on an encrypted volume. FileVault is a documented prerequisite.
 - The database and any recorded media are gitignored.
-
-## Licence
-
-AGPL-3.0-or-later.
