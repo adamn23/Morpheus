@@ -118,6 +118,116 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        2,
+        """
+        -- M2: cueing, conditioning, and the morning report.
+
+        -- Cue audio, hashed. The trained/untrained distinction is the basis of
+        -- the experiment's control arm, so it must be a recoverable fact rather
+        -- than an operator's assertion (design.md §15.1).
+        CREATE TABLE cue_assets (
+            id         INTEGER PRIMARY KEY,
+            name       TEXT    NOT NULL,
+            path       TEXT    NOT NULL,
+            sha256     TEXT    NOT NULL UNIQUE,
+            trained    INTEGER NOT NULL,
+            samplerate INTEGER NOT NULL,
+            duration_s REAL    NOT NULL,
+            created_at TEXT    NOT NULL
+        );
+
+        -- Hedged observations. The kind column is constrained to the closed
+        -- EventKind enum; nothing here asserts a sleep stage.
+        CREATE TABLE events (
+            id               INTEGER PRIMARY KEY,
+            session_id       INTEGER NOT NULL REFERENCES sessions(id),
+            t_mono           REAL    NOT NULL,
+            t_utc            TEXT    NOT NULL,
+            kind             TEXT    NOT NULL,
+            confidence       REAL,
+            duration_ms      REAL,
+            features_json    TEXT,
+            detector_version TEXT
+        );
+        CREATE INDEX idx_events_session ON events(session_id, t_mono);
+
+        -- One row per cue, written BEFORE audio starts so that a crash
+        -- mid-playback still leaves an attributable record (design.md §12.3).
+        CREATE TABLE cues (
+            id                INTEGER PRIMARY KEY,
+            session_id        INTEGER NOT NULL REFERENCES sessions(id),
+            t_mono            REAL    NOT NULL,
+            t_utc             TEXT    NOT NULL,
+            cue_asset_id      INTEGER REFERENCES cue_assets(id),
+            asset_sha256      TEXT,
+            gain              REAL    NOT NULL,
+            gain_requested    REAL,
+            ramp_ms           REAL    NOT NULL,
+            duration_ms       REAL    NOT NULL,
+            repetition_index  INTEGER NOT NULL DEFAULT 0,
+            policy_version    TEXT,
+            gate_snapshot_json TEXT,
+            trigger           TEXT,
+            played            INTEGER NOT NULL DEFAULT 0,
+            error             TEXT
+        );
+        CREATE INDEX idx_cues_session ON cues(session_id, t_mono);
+
+        -- What happened in the observation window after a cue.
+        CREATE TABLE cue_outcomes (
+            cue_id               INTEGER PRIMARY KEY REFERENCES cues(id),
+            window_s             REAL    NOT NULL,
+            outcome              TEXT    NOT NULL,
+            motion_before        REAL,
+            motion_after         REAL,
+            motion_delta         REAL,
+            latency_to_motion_ms REAL,
+            quality_during       REAL,
+            coverage_during      REAL
+        );
+
+        -- Pre-sleep / WBTB conditioning. Adherence is a covariate in every
+        -- analysis and the most likely alternative explanation for a positive
+        -- result, so it is measured rather than assumed (design.md §14).
+        CREATE TABLE training_sessions (
+            id                INTEGER PRIMARY KEY,
+            session_id        INTEGER REFERENCES sessions(id),
+            cue_asset_id      INTEGER REFERENCES cue_assets(id),
+            kind              TEXT    NOT NULL,
+            started_at        TEXT    NOT NULL,
+            completed_at      TEXT,
+            completed         INTEGER NOT NULL DEFAULT 0,
+            duration_s        REAL,
+            steps_json        TEXT,
+            engagement_rating INTEGER,
+            notes             TEXT
+        );
+
+        -- Morning report. Narrative is the primary outcome's raw material and
+        -- is treated as sensitive throughout (design.md §20).
+        CREATE TABLE reports (
+            id                INTEGER PRIMARY KEY,
+            session_id        INTEGER REFERENCES sessions(id),
+            report_date       TEXT    NOT NULL UNIQUE,
+            submitted_at      TEXT    NOT NULL,
+            narrative         TEXT,
+            lucid_binary      INTEGER,
+            lucid_confidence  INTEGER,
+            knew_was_dreaming INTEGER,
+            cue_heard         INTEGER,
+            cue_indirect      INTEGER,
+            cue_woke_me       INTEGER,
+            dreams_recalled   INTEGER,
+            vividness         INTEGER,
+            sleep_quality     INTEGER,
+            awakenings        INTEGER,
+            guessed_condition TEXT,
+            notes             TEXT
+        );
+        CREATE INDEX idx_reports_session ON reports(session_id);
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)
