@@ -298,3 +298,126 @@ def test_disabled_eye_tracking_leaves_columns_null(config) -> None:
             emitted.append(out)
     assert emitted[0].eye_flow_l is None
     assert emitted[0].eye_flow_bilateral_corr is None
+
+
+# ------------------------------------------------- the noise-floor defect
+
+
+def _noise_floor(sigma: float, *, equalize: bool = False, seed: int = 0) -> float:
+    """Reported flow on a perfectly static scene with sensor noise.
+
+    The true motion is exactly zero. Anything above the flow floor is the
+    instrument inventing movement.
+    """
+    ext = EyeFlowExtractor(EyeFlowConfig(roi_scale=0.28, equalize=equalize))
+    rng = np.random.default_rng(seed)
+    base = scene(eye_dx=0)
+    marks = landmarks_for()
+    readings = []
+    for _ in range(20):
+        noisy = np.clip(
+            base.astype(np.float64) + rng.normal(0, sigma, base.shape), 0, 255
+        ).astype(np.uint8)
+        sample = ext.update(noisy, marks)
+        if sample.flow_left is not None:
+            readings.append(sample.flow_left)
+    return float(np.median(readings)) if readings else 0.0
+
+
+def test_sensor_noise_does_not_masquerade_as_flow() -> None:
+    """Regression for the defect that failed the first real calibration.
+
+    Reporting mean(|v|) lets noise add constructively: every pixel gets a random
+    vector and magnitudes never cancel. On real footage that produced a baseline
+    of 0.2466 on a still face, against 0.0004 for a static synthetic scene, and
+    it buried a genuine saccade sitting 1.6x above it.
+
+    Measuring |mean(v)| makes incoherent noise cancel. See
+    docs/m1-instrument-defect.md for the full write-up and the pre-committed
+    re-test criteria.
+    """
+    for sigma in (2.0, 4.0):
+        floor = _noise_floor(sigma)
+        assert floor < 0.05, (
+            f"static scene with sensor noise sigma={sigma} reported {floor:.4f} of "
+            f"flow; the true motion is zero and the instrument is noise-dominated"
+        )
+
+
+def test_negligible_shifts_are_not_warped() -> None:
+    """warpAffine interpolation was itself a noise source.
+
+    Correcting a 0.03 px "misalignment" low-pass filters one frame and not the
+    other, and the asymmetry reads as coherent flow. It doubled the noise floor
+    while correcting nothing real.
+    """
+    from morpheus.vision.eye_flow import MIN_REGISTRATION_SHIFT_PX, _register
+
+    rng = np.random.default_rng(0)
+    base = scene(eye_dx=0)[200:280, 340:420].astype(np.float32) / 255.0
+    a = np.clip(base + rng.normal(0, 0.01, base.shape), 0, 1).astype(np.float32)
+    b = np.clip(base + rng.normal(0, 0.01, base.shape), 0, 1).astype(np.float32)
+
+    aligned, _ = _register(a, b)
+    assert aligned is a, "a sub-pixel shift should be left uncorrected"
+    assert MIN_REGISTRATION_SHIFT_PX > 0
+
+
+def test_signal_to_noise_is_large_under_realistic_noise() -> None:
+    """A real eye movement must stand well clear of the noise floor."""
+    floor = _noise_floor(2.0)
+
+    ext = EyeFlowExtractor(EyeFlowConfig(roi_scale=0.28, equalize=False))
+    rng = np.random.default_rng(1)
+    marks = landmarks_for()
+    ext.update(
+        np.clip(scene(eye_dx=0).astype(np.float64) + rng.normal(0, 2.0, (480, 640)), 0, 255).astype(np.uint8),
+        marks,
+    )
+    moved = ext.update(
+        np.clip(scene(eye_dx=5).astype(np.float64) + rng.normal(0, 2.0, (480, 640)), 0, 255).astype(np.uint8),
+        marks,
+    )
+    assert moved.flow_left is not None
+    assert moved.flow_left > floor * 20, (
+        f"eye movement ({moved.flow_left:.4f}) is not clearly above the noise "
+        f"floor ({floor:.4f})"
+    )
+
+
+def test_coherence_separates_signal_from_noise() -> None:
+    """The ratio is what makes a noise-dominated night identifiable afterwards.
+
+    Measured as a median over a run of frames, matching how the calibration
+    criterion uses it. A single frame pair is far too noisy to threshold on —
+    an early version of this test asserted on one pair and saw 0.379 against a
+    20-frame median of 0.235 for the same condition.
+    """
+    marks = landmarks_for()
+    base = scene(eye_dx=0)
+
+    def median_coherence(eye_dx: float, sigma: float, seed: int) -> float:
+        ext = EyeFlowExtractor(EyeFlowConfig(roi_scale=0.28, equalize=False))
+        rng = np.random.default_rng(seed)
+        values = []
+        for i in range(20):
+            img = scene(eye_dx=eye_dx if i % 2 else 0)
+            noisy = np.clip(
+                img.astype(np.float64) + rng.normal(0, sigma, img.shape), 0, 255
+            ).astype(np.uint8)
+            sample = ext.update(noisy, marks)
+            if sample.coherence_left is not None:
+                values.append(sample.coherence_left)
+        return float(np.median(values))
+
+    noise = median_coherence(0.0, 3.0, seed=2)
+    signal = median_coherence(5.0, 3.0, seed=3)
+
+    assert signal > 0.7, f"real movement should be coherent, got {signal:.3f}"
+    assert noise < 0.35, f"pure noise should be incoherent, got {noise:.3f}"
+    assert signal > noise * 2
+
+
+def test_clahe_is_off_by_default() -> None:
+    """It roughly doubled the noise floor for contrast the fix no longer needs."""
+    assert EyeFlowConfig().equalize is False

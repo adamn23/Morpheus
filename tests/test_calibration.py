@@ -237,3 +237,52 @@ def test_runner_records_a_segment_from_video(config, make_video) -> None:
     assert recording.key == "eyes_closed_still"
     assert len(recording.samples) > 10
     assert all("eye_flow" in row for row in recording.samples)
+
+
+# ----------------------------------------------------- desk vs bed staging
+
+
+def test_stages_partition_the_protocol() -> None:
+    from morpheus.calibration.protocol import PROTOCOL, STAGES
+
+    assert set(STAGES["signal"]) | set(STAGES["posture"]) == {s.key for s in PROTOCOL}
+    assert not set(STAGES["signal"]) & set(STAGES["posture"])
+
+
+def test_positive_control_is_a_desk_segment() -> None:
+    """The H1 test must be runnable before any bedside mount exists.
+
+    That is what lets the decisive question be answered on a laptop, today, for
+    nothing — rather than waiting on hardware.
+    """
+    from morpheus.calibration.protocol import SegmentSetup, positive_controls
+
+    for segment in positive_controls():
+        assert segment.setup is SegmentSetup.DESK
+
+
+def test_postures_are_bed_segments() -> None:
+    """Posture visibility measured from a desk describes nothing.
+
+    A first full run reported 98-99% availability for all four sleep postures,
+    which is not credible for a side sleeper and was an artefact of lying down
+    in front of a laptop.
+    """
+    from morpheus.calibration.protocol import SegmentSetup, posture_segments
+
+    for segment in posture_segments():
+        assert segment.setup is SegmentSetup.BED
+
+
+def test_each_stage_is_short_enough_to_finish() -> None:
+    from morpheus.calibration.protocol import stage_seconds
+
+    for stage in ("signal", "posture"):
+        assert 60 <= stage_seconds(stage) <= 600
+
+
+def test_unknown_stage_is_rejected() -> None:
+    from morpheus.calibration.protocol import segments_for
+
+    with pytest.raises(KeyError):
+        segments_for("nonsense")
