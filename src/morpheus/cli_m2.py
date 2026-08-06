@@ -38,6 +38,8 @@ def register(app: typer.Typer) -> None:
     app.command("night")(night)
     app.command("journal")(journal)
     app.command("baseline")(baseline)
+    app.command("import-journal")(import_journal)
+    app.command("dream-signs")(dream_signs)
 
 
 def _registry(config: MorpheusConfig, conn) -> CueAssetRegistry:
@@ -505,3 +507,131 @@ def _wrap(text: str, width: int) -> list[str]:
 
 def _s(value) -> str:
     return "-" if value is None else str(value)
+
+
+# ------------------------------------------------------------- import-journal
+
+
+def import_journal(
+    path: Path = typer.Argument(..., help="File or directory exported from your notes app."),
+    commit: bool = typer.Option(
+        False, "--commit", help="Actually write. Without this, only a preview is shown."
+    ),
+    overwrite: bool = typer.Option(
+        False, help="Replace existing reports on the same dates."
+    ),
+    sample: int = typer.Option(3, help="How many parsed entries to show in the preview."),
+    untagged: str = typer.Option(
+        "unscored",
+        help="What an entry with no lucidity marker means: 'unscored' (excluded "
+        "from the rate) or 'not-lucid' (counted as a non-lucid night).",
+    ),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Import an existing dream journal.
+
+    Preview-first by design. Parsing freeform notes is guesswork — dates live in
+    filenames or headings, lucidity is tagged however you happened to tag it —
+    and a journal you cannot regenerate is the wrong thing to mangle silently.
+    Nothing is written until you pass --commit.
+    """
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    from .report.importer import format_preview, scan
+
+    config = MorpheusConfig.load(config_path)
+    try:
+        preview = scan(path)
+    except FileNotFoundError:
+        typer.secho(f"not found: {path}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    typer.echo(format_preview(preview, limit=sample))
+
+    if not preview.usable:
+        typer.secho("\nnothing importable was found", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    if not commit:
+        typer.echo("")
+        typer.secho("Preview only — nothing written. Re-run with --commit to import.",
+                    fg=typer.colors.YELLOW)
+        return
+
+    conn = open_db(config.storage.db_path)
+    store = ReportStore(conn)
+
+    if untagged not in ("unscored", "not-lucid"):
+        typer.secho("--untagged must be 'unscored' or 'not-lucid'", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    written = skipped = 0
+    for entry in preview.usable:
+        assert entry.entry_date
+        if store.get(entry.entry_date) is not None and not overwrite:
+            skipped += 1
+            continue
+        lucid = entry.lucid
+        if lucid is None and untagged == "not-lucid":
+            lucid = False
+        store.submit(
+            MorningReport(
+                report_date=entry.entry_date,
+                narrative=entry.narrative,
+                lucid_binary=lucid,
+                # Deliberately left unset: these entries predate the protocol,
+                # so inventing recall counts or vividness scores for them would
+                # manufacture data that was never collected.
+                notes="imported from prior journal",
+            )
+        )
+        written += 1
+
+    stats = ReportStore(conn).baseline_stats(limit=10_000)
+    conn.close()
+
+    typer.secho(f"\nimported {written} entries", fg=typer.colors.GREEN)
+    if skipped:
+        typer.echo(f"skipped {skipped} dates that already had reports (use --overwrite to replace)")
+    if stats.get("lucid_rate_per_night") is not None:
+        typer.echo(
+            f"baseline now {stats['lucid_rate_per_night'] * 100:.1f}% of nights "
+            f"({stats['lucid_per_week']:.2f}/week) over {stats['nights_scored']} scored nights"
+        )
+    typer.echo("")
+    typer.echo("Treat these as a prior, not as protocol data: they were written")
+    typer.echo("before the outcome wording was fixed, so they are not strictly")
+    typer.echo("comparable with nights collected from here on.")
+
+
+def dream_signs(
+    min_nights: int = typer.Option(3, help="Minimum separate nights for a motif to count."),
+    top: int = typer.Option(20, help="How many motifs to show."),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Find recurring motifs across your dream narratives.
+
+    Feeds the dream-sign step of the conditioning protocol, which is much
+    stronger when it names things that actually recur in your dreams than when
+    it asks you to think of one.
+    """
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    from .analysis.dream_signs import extract, format_signs
+
+    config = MorpheusConfig.load(config_path)
+    if not config.storage.db_path.exists():
+        typer.secho("no database yet", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    conn = connect(config.storage.db_path, read_only=True)
+    rows = conn.execute(
+        "SELECT narrative FROM reports WHERE narrative IS NOT NULL AND narrative != ''"
+    ).fetchall()
+    conn.close()
+
+    narratives = [r["narrative"] for r in rows]
+    if not narratives:
+        typer.echo("no narratives recorded yet")
+        return
+
+    signs = extract(narratives, min_nights=min_nights, top_n=top)
+    typer.echo(format_signs(signs, len(narratives)))
