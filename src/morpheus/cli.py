@@ -463,6 +463,11 @@ def _write_calibrated_config(
     typer.echo(f"                     use it with:  --config {path}")
 
 
+from . import cli_m2  # noqa: E402  (registers M2 commands onto `app`)
+
+cli_m2.register(app)
+
+
 def main() -> None:
     sys.exit(app())
 
