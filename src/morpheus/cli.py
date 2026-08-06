@@ -463,9 +463,10 @@ def _write_calibrated_config(
     typer.echo(f"                     use it with:  --config {path}")
 
 
-from . import cli_m2  # noqa: E402  (registers M2 commands onto `app`)
+from . import cli_m2, cli_research  # noqa: E402  (register commands onto `app`)
 
 cli_m2.register(app)
+cli_research.register(app)
 
 
 def main() -> None:
