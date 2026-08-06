@@ -46,6 +46,11 @@ class CameraConfig(BaseModel):
     gain: Optional[float] = None
     autofocus: Optional[bool] = False
     warmup_frames: int = 15  # discard; sensors take time to settle
+    # macOS raises its camera-permission dialog asynchronously and fails the
+    # open immediately, so the first run of a new binary always fails without
+    # a retry window. Also covers a USB camera still enumerating.
+    open_retry_attempts: int = 6
+    open_retry_delay_s: float = 2.0
     read_timeout_s: float = 2.0
     reconnect_backoff_s: float = 2.0
     max_reconnect_attempts: int = 30

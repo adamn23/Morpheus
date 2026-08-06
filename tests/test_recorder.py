@@ -283,3 +283,89 @@ def test_replay_handles_bogus_frame_rate(make_video, monkeypatch) -> None:
     # meaningful. A reported rate of zero must fall back to 30 fps rather than
     # dividing by it.
     assert second.t_mono - first.t_mono == pytest.approx(1 / 30.0, rel=1e-6)
+
+
+# ------------------------------------------------------- camera open retry
+
+
+class _FakeCapture:
+    """Stands in for cv2.VideoCapture, failing to open N times first."""
+
+    instances: list["_FakeCapture"] = []
+
+    def __init__(self, device, fail_times: list[int]) -> None:
+        self.device = device
+        self.released = False
+        self._open = fail_times[0] <= 0
+        fail_times[0] -= 1
+        _FakeCapture.instances.append(self)
+
+    def isOpened(self) -> bool:  # noqa: N802 - mirrors the cv2 API
+        return self._open
+
+    def getBackendName(self) -> str:  # noqa: N802 - mirrors the cv2 API
+        return "fake"
+
+    def release(self) -> None:
+        self.released = True
+
+    def set(self, *_: object) -> bool:
+        return False
+
+    def get(self, *_: object) -> float:
+        return 0.0
+
+    def read(self):
+        return False, None
+
+
+@pytest.fixture
+def fake_capture(monkeypatch):
+    """Patch cv2.VideoCapture to fail a configurable number of opens."""
+    import cv2
+
+    def install(fail_count: int):
+        remaining = [fail_count]
+        _FakeCapture.instances = []
+        monkeypatch.setattr(
+            cv2, "VideoCapture", lambda device, *a, **k: _FakeCapture(device, remaining)
+        )
+        return _FakeCapture.instances
+
+    return install
+
+
+def test_camera_open_retries_through_permission_dialog(config: MorpheusConfig, fake_capture) -> None:
+    """macOS raises its consent dialog asynchronously and fails the open.
+
+    Without a retry window the first run of any freshly-built binary looks like
+    a hardware fault, and the user has to run every command twice. Regression
+    guard for exactly that.
+    """
+    from morpheus.capture.webcam import WebcamSource
+
+    config.camera.open_retry_attempts = 4
+    config.camera.open_retry_delay_s = 0.01
+    config.camera.warmup_frames = 0
+    instances = fake_capture(fail_count=2)
+
+    source = WebcamSource(config.camera)
+    source.open()
+
+    assert len(instances) == 3, "should have retried twice before succeeding"
+    assert all(c.released for c in instances[:-1]), "failed handles must be released"
+
+
+def test_camera_open_gives_up_with_actionable_error(config: MorpheusConfig, fake_capture) -> None:
+    from morpheus.capture.webcam import WebcamSource
+
+    config.camera.open_retry_attempts = 3
+    config.camera.open_retry_delay_s = 0.01
+    fake_capture(fail_count=99)
+
+    with pytest.raises(FrameSourceError) as excinfo:
+        WebcamSource(config.camera).open()
+
+    message = str(excinfo.value)
+    assert "3 attempts" in message
+    assert "permission" in message.lower()

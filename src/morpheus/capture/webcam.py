@@ -19,6 +19,7 @@ movement. That is fictional data, and it is worse than no data.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -29,6 +30,8 @@ import numpy as np
 from ..config import CameraConfig
 from ..types import Frame
 from .source import FrameSource, FrameSourceError
+
+log = logging.getLogger("morpheus.capture")
 
 # UVC exposes manual mode as 1 and aperture-priority (auto) as 3. V4L2 maps
 # these onto 0.25 / 0.75. Backends disagree, so we try both and verify.
@@ -68,20 +71,49 @@ class WebcamSource(FrameSource):
         self._warmup(cap)
 
     def _open_capture(self) -> cv2.VideoCapture:
+        """Open the camera, waiting out the macOS permission dialog.
+
+        On macOS the first access to a camera triggers a TCC consent dialog.
+        AVFoundation raises that dialog *asynchronously* and fails the open
+        immediately, so a single-attempt open always fails the first time a
+        binary is used — even when permission is subsequently granted. The
+        second run then succeeds, because consent is already recorded.
+
+        Retrying across a short window absorbs that, and also covers a USB
+        camera still enumerating after being plugged in. Without it, the first
+        run of every freshly-built binary looks like a hardware fault.
+        """
         cfg = self._cfg
         device: Any = cfg.device
-        cap = cv2.VideoCapture(device)
-        if not cap.isOpened():
-            raise FrameSourceError(
-                f"could not open camera {device!r}. On macOS, camera access must be "
-                f"granted to the binary running this process (System Settings > "
-                f"Privacy & Security > Camera), not to the terminal that launched it."
-            )
-        try:
-            self._backend_name = cap.getBackendName()
-        except cv2.error:
-            self._backend_name = "unknown"
-        return cap
+        attempts = max(1, cfg.open_retry_attempts)
+
+        for attempt in range(1, attempts + 1):
+            cap = cv2.VideoCapture(device)
+            if cap.isOpened():
+                try:
+                    self._backend_name = cap.getBackendName()
+                except cv2.error:
+                    self._backend_name = "unknown"
+                return cap
+            cap.release()
+            if attempt < attempts:
+                if attempt == 1:
+                    log.info(
+                        "camera not available yet — if macOS is showing a permission "
+                        "dialog, click Allow. Retrying for up to %.0f s.",
+                        (attempts - 1) * cfg.open_retry_delay_s,
+                    )
+                time.sleep(cfg.open_retry_delay_s)
+
+        raise FrameSourceError(
+            f"could not open camera {device!r} after {attempts} attempts over "
+            f"{(attempts - 1) * cfg.open_retry_delay_s:.0f} s.\n"
+            f"  - If a permission dialog appeared, grant access and run again.\n"
+            f"  - On macOS, camera access is granted to the binary running this "
+            f"process (System Settings > Privacy & Security > Camera), not to the "
+            f"terminal that launched it.\n"
+            f"  - Check no other application is holding the camera."
+        )
 
     def _configure(self, cap: cv2.VideoCapture) -> None:
         cfg = self._cfg
