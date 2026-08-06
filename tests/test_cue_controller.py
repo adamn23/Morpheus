@@ -270,10 +270,16 @@ def test_zero_or_more_cap_is_always_respected(cap) -> None:
     assert len(run_night(ctl, hours=8.0, step_s=30.0)) <= cap
 
 
-def test_gate_snapshot_records_every_gate() -> None:
-    """Stored with each cue so a night can be re-examined without re-running it."""
+def test_gate_snapshot_records_every_active_gate() -> None:
+    """Stored with each cue so a night can be re-examined without re-running it.
+
+    G9 is excluded here because it is not merely passing in scheduled mode — it
+    is absent. A snapshot that listed it as passed would imply eye activity had
+    been consulted and approved, when it was never consulted at all.
+    """
     ctl, _ = build(min_delay_s=0.0)
     cues = run_night(ctl, hours=1.0)
     assert cues
     snapshot = cues[0][1].gates
-    assert set(snapshot.to_dict()) == {g.value for g in Gate}
+    expected = {g.value for g in Gate} - {Gate.G9_EYE_ACTIVITY.value}
+    assert set(snapshot.to_dict()) == expected
