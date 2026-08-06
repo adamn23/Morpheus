@@ -103,3 +103,34 @@ def test_no_video_persistence_in_daemon() -> None:
         "image-writing call found in the daemon. Morpheus persists derived "
         "features only (design.md §20).\n" + "\n".join(offenders)
     )
+
+
+def test_every_package_has_a_tracked_init() -> None:
+    """Catch the packaging miss that has now happened twice.
+
+    An editable install resolves missing __init__.py via namespace packages, so
+    the whole test suite passes while a real wheel silently omits the package.
+    It only surfaces on a fresh clone or a genuine install — i.e. for someone
+    else, later.
+    """
+    import subprocess
+
+    repo = SRC.parent.parent
+    missing: list[str] = []
+    for directory in sorted(p for p in SRC.rglob("*") if p.is_dir()):
+        if directory.name in {"__pycache__"} or directory.name.endswith(".egg-info"):
+            continue
+        if not any(directory.glob("*.py")):
+            continue
+        init = directory / "__init__.py"
+        if not init.exists():
+            missing.append(f"{init.relative_to(repo)} does not exist")
+            continue
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(init.relative_to(repo))],
+            cwd=repo, capture_output=True,
+        )
+        if tracked.returncode != 0:
+            missing.append(f"{init.relative_to(repo)} exists but is untracked")
+
+    assert not missing, "packaging would omit these:\n  " + "\n  ".join(missing)
