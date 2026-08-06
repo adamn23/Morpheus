@@ -10,14 +10,18 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 
-# M0 dependency set. Deliberately minimal: every entry is justified in
-# docs/design.md §8. FastAPI, scikit-learn and sounddevice arrive in M2+;
-# PyTorch is explicitly out of scope until M4 passes (design.md §11).
+# Every entry is justified in docs/design.md §8. PyTorch remains explicitly
+# out of scope until M4 passes with labelled reference data (design.md §11):
+# a sequence model trained on an unvalidated target would fit noise.
 dependencies = [
     "opencv-python>=4.10",  # capture, quality metrics, YuNet presence, motion
     "numpy>=2.0",           # feature math
     "pydantic>=2.7",        # typed config + feature frames
     "typer>=0.12",          # CLI
+    "scipy>=1.11",          # power calculation, statistics
+    "scikit-learn>=1.4",    # M4 classifier, AUC, calibration curves
+    "sounddevice>=0.4",     # M2 cue playback via PortAudio
+    "mediapipe>=0.10",      # M1 dense face mesh; degrades to YuNet if absent
 ]
 
 [project.optional-dependencies]

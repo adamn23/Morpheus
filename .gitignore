@@ -9,6 +9,7 @@ dist/
 
 # Model weights are fetched by `morpheus setup-models`, not vendored.
 models/*.onnx
+models/*.task
 
 # Recorded data never enters version control. It is sleep data.
 data/

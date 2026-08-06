@@ -42,6 +42,7 @@ def register(app: typer.Typer) -> None:
     app.command("baseline")(baseline)
     app.command("import-journal")(import_journal)
     app.command("dream-signs")(dream_signs)
+    app.command("calibrate")(calibrate)
 
 
 def _registry(config: MorpheusConfig, conn) -> CueAssetRegistry:
@@ -660,3 +661,188 @@ def dream_signs(
 
     signs = extract(narratives, min_nights=min_nights, top_n=top)
     typer.echo(format_signs(signs, len(narratives)))
+
+
+# ------------------------------------------------------------------ calibrate
+
+
+def calibrate(
+    audio: bool = typer.Option(False, help="Run audio loudness calibration instead."),
+    show: bool = typer.Option(False, help="Show the most recent calibration profile."),
+    device: Optional[str] = typer.Option(None, help="Camera device index or path."),
+    allow_auto_exposure: bool = typer.Option(False, help="Daylight development only."),
+    segments: Optional[str] = typer.Option(
+        None, help="Comma-separated segment keys to run. Default: all."
+    ),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Guided waking calibration, including the H1 positive-control test.
+
+    The important segment is deliberate closed-eye eye movement versus closed-eye
+    stillness. If the camera cannot separate those two while you are awake,
+    cooperative, well lit and holding still, it will not separate anything
+    subtler from a sleeping face in the dark. That is the cheapest available
+    test of the whole premise, and it takes about fifteen minutes.
+    """
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    from .calibration.profile import build_profile, format_profile, latest
+    from .calibration.profile import save as save_profile
+    from .calibration.protocol import PROTOCOL, SEGMENTS_BY_KEY, total_seconds
+    from .calibration.runner import CalibrationRunner
+
+    config = MorpheusConfig.load(config_path)
+    conn = open_db(config.storage.db_path)
+
+    if show:
+        row = latest(conn)
+        conn.close()
+        if row is None:
+            typer.echo("no calibration profile recorded yet")
+            raise typer.Exit(0)
+        typer.echo(f"created            {row['created_at']}")
+        typer.echo(f"positive control   {row['positive_control_auc']}")
+        typer.echo(f"head-turn leakage  {row['head_turn_leakage']}")
+        typer.echo(f"suggested thresh   {row['suggested_threshold']}")
+        typer.echo(f"passed             {bool(row['passed'])}")
+        raise typer.Exit(0)
+
+    if audio:
+        _calibrate_audio(conn, config)
+        conn.close()
+        raise typer.Exit(0)
+
+    if device is not None:
+        config.camera.device = int(device) if device.isdigit() else device
+    if allow_auto_exposure:
+        config.camera.require_manual_exposure = False
+    config.eye.enabled = True
+
+    chosen = PROTOCOL
+    if segments:
+        keys = [k.strip() for k in segments.split(",") if k.strip()]
+        unknown = [k for k in keys if k not in SEGMENTS_BY_KEY]
+        if unknown:
+            typer.secho(f"unknown segments: {unknown}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        chosen = tuple(SEGMENTS_BY_KEY[k] for k in keys)
+
+    source = WebcamSource(config.camera)
+    try:
+        source.open()
+    except AudioError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - surfaced to the user, not swallowed
+        typer.secho(f"could not open camera: {exc}", fg=typer.colors.RED)
+        conn.close()
+        raise typer.Exit(1)
+
+    runner = CalibrationRunner(config, source)
+    typer.echo(f"\nMorpheus calibration — {len(chosen)} segments, "
+               f"about {total_seconds() // 60} min")
+    typer.echo("=" * 68)
+
+    def before(segment) -> bool:
+        typer.echo("")
+        typer.secho(f"  {segment.title}  ({segment.seconds}s)", fg=typer.colors.CYAN, bold=True)
+        for line in _wrap(segment.instruction, 64):
+            typer.echo(f"    {line}")
+        typer.echo("    press Enter when you are in position, then hold")
+        input()
+        typer.echo("    recording...")
+        return True
+
+    try:
+        collected = runner.run_all(before_segment=before, segments=chosen)
+    except KeyboardInterrupt:
+        typer.echo("\naborted")
+        source.close()
+        conn.close()
+        raise typer.Exit(1)
+    source.close()
+
+    profile = build_profile(collected)
+    typer.echo("")
+    typer.echo(format_profile(profile))
+
+    save_profile(conn, profile)
+    conn.close()
+    typer.secho("\nprofile saved", fg=typer.colors.GREEN)
+
+
+def _calibrate_audio(conn, config: MorpheusConfig) -> None:
+    """Ascending-limits loudness calibration (design.md §13.3).
+
+    Absolute SPL at the pillow is unknowable without a meter, so this anchors
+    digital gain to the user's own judgement. Ascending order matters: starting
+    loud and coming down biases the faintest-audible estimate upward, because
+    you already know what you are listening for.
+    """
+    from datetime import datetime, timezone
+
+    from .audio.assets import CueAssetRegistry
+    from .audio.player import load_wav
+
+    registry = CueAssetRegistry(conn, config.storage.data_dir / "cues")
+    trained = registry.list(trained=True)
+    if not trained:
+        typer.secho("register a cue first: morpheus cues --add-preset trained-ascending", fg=typer.colors.RED)
+        return
+    asset = trained[0]
+    waveform, _ = load_wav(asset.path)
+
+    limits = SafetyLimits()
+    player = CuePlayer(SoundDeviceSink(), ceiling=limits.max_gain)
+
+    typer.echo("\nAudio calibration")
+    typer.echo("=" * 68)
+    typer.echo("  Set your speaker where it will sit overnight, at the volume you")
+    typer.echo("  will leave it at. Lie in your normal sleeping position. Everything")
+    typer.echo("  below is relative to that physical setup — change the speaker or")
+    typer.echo("  its knob afterwards and this calibration is void.\n")
+    input("  press Enter when ready")
+
+    faintest = None
+    for gain in [0.01, 0.02, 0.03, 0.05, 0.07, 0.10, 0.14, 0.18, 0.24, 0.30]:
+        if gain > limits.max_gain:
+            break
+        player.play(player.render(waveform, gain=gain, ramp_ms=1200, duration_ms=None))
+        if typer.confirm(f"  gain {gain:.2f} — could you hear it?", default=False):
+            faintest = gain
+            break
+
+    if faintest is None:
+        typer.secho(
+            "\n  Not audible even at the ceiling. Turn the speaker up, or move it\n"
+            "  closer, and run this again. Do NOT raise the software ceiling to\n"
+            "  compensate — it exists to bound what a bug can do.",
+            fg=typer.colors.RED,
+        )
+        return
+
+    typer.echo("")
+    comfortable = faintest
+    for gain in [g for g in [0.05, 0.08, 0.12, 0.16, 0.20, 0.26, 0.32] if g > faintest]:
+        if gain > limits.max_gain:
+            break
+        player.play(player.render(waveform, gain=gain, ramp_ms=1200, duration_ms=None))
+        if not typer.confirm(f"  gain {gain:.2f} — still comfortable to sleep through?", default=True):
+            break
+        comfortable = gain
+
+    ceiling = min(limits.max_gain, round(comfortable * 1.2, 3))
+    conn.execute(
+        "INSERT INTO audio_calibrations (created_at, cue_asset_id, faintest_gain, "
+        "comfortable_gain, ceiling_gain, output_device) VALUES (?,?,?,?,?,?)",
+        (
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            asset.id, faintest, comfortable, ceiling, SoundDeviceSink().describe(),
+        ),
+    )
+    typer.echo("")
+    typer.secho(f"  faintest audible   {faintest:.3f}", fg=typer.colors.GREEN)
+    typer.secho(f"  comfortable        {comfortable:.3f}", fg=typer.colors.GREEN)
+    typer.secho(f"  suggested ceiling  {ceiling:.3f}", fg=typer.colors.GREEN)
+    typer.echo("")
+    typer.echo("  Cueing starts near the faintest level and adapts upward only on")
+    typer.echo("  quiet outcomes. Waking you is the failure mode that matters, so")
+    typer.echo("  the starting point is deliberately close to inaudible.")

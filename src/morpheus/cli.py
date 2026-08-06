@@ -21,6 +21,8 @@ from .capture.replay import FileReplaySource
 from .capture.source import FrameSourceError
 from .capture.webcam import WebcamSource
 from .config import (
+    FACE_LANDMARKER_SHA256,
+    FACE_LANDMARKER_URL,
     YUNET_SHA256,
     YUNET_URL,
     MorpheusConfig,
@@ -63,45 +65,68 @@ def _load_config(path: Optional[Path]) -> MorpheusConfig:
 
 @app.command("setup-models")
 def setup_models(
-    force: bool = typer.Option(False, help="Re-download even if the file exists."),
+    force: bool = typer.Option(False, help="Re-download even if the files exist."),
 ) -> None:
-    """Fetch the YuNet face-detection model.
+    """Fetch the face-detection and face-landmark models.
 
-    Weights are not vendored into the repository: they are third-party
-    artefacts with their own licence, and pinning by hash makes the provenance
-    explicit and verifiable.
+    Weights are not vendored: they are third-party artefacts with their own
+    licences, and pinning by hash makes provenance explicit and verifiable.
+
+    Both models are fetched. YuNet drives M0 presence detection; the MediaPipe
+    landmarker drives M1 eye tracking. Missing the second does not fail loudly —
+    M1 silently degrades to five-point landmarks and stops producing eyelid
+    features — so it is fetched here rather than left to be discovered later.
     """
     _setup_logging(False)
     config = MorpheusConfig()
-    dest = Path(config.presence.model_path)
-    dest.parent.mkdir(parents=True, exist_ok=True)
 
-    if dest.exists() and not force:
-        digest = hashlib.sha256(dest.read_bytes()).hexdigest()
-        if digest == YUNET_SHA256:
-            typer.echo(f"model already present and verified: {dest}")
-            raise typer.Exit(0)
-        typer.echo(f"model present but hash mismatch ({digest[:12]}...); re-downloading")
+    targets = [
+        ("YuNet face detector", Path(config.presence.model_path), YUNET_URL, YUNET_SHA256),
+        (
+            "MediaPipe face landmarker",
+            Path(config.eye.landmark_model),
+            FACE_LANDMARKER_URL,
+            FACE_LANDMARKER_SHA256,
+        ),
+    ]
 
-    typer.echo(f"downloading {YUNET_URL}")
-    try:
-        with urllib.request.urlopen(YUNET_URL, timeout=60) as response:
-            payload = response.read()
-    except OSError as exc:
-        typer.secho(f"download failed: {exc}", fg=typer.colors.RED)
-        raise typer.Exit(1)
+    failures = 0
+    for label, dest, url, expected in targets:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists() and not force:
+            digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+            if digest == expected:
+                typer.echo(f"  {label}: present and verified")
+                continue
+            typer.echo(f"  {label}: hash mismatch ({digest[:12]}...); re-downloading")
 
-    digest = hashlib.sha256(payload).hexdigest()
-    if digest != YUNET_SHA256:
+        typer.echo(f"  {label}: downloading...")
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:
+                payload = response.read()
+        except OSError as exc:
+            typer.secho(f"  {label}: download failed: {exc}", fg=typer.colors.RED)
+            failures += 1
+            continue
+
+        digest = hashlib.sha256(payload).hexdigest()
+        if digest != expected:
+            typer.secho(
+                f"  {label}: hash mismatch (expected {expected[:12]}..., got "
+                f"{digest[:12]}...). Refusing to install.",
+                fg=typer.colors.RED,
+            )
+            failures += 1
+            continue
+
+        dest.write_bytes(payload)
         typer.secho(
-            f"hash mismatch: expected {YUNET_SHA256[:12]}..., got {digest[:12]}...\n"
-            "Refusing to install. Verify the source before proceeding.",
-            fg=typer.colors.RED,
+            f"  {label}: installed ({len(payload):,} bytes, sha256 verified)",
+            fg=typer.colors.GREEN,
         )
-        raise typer.Exit(1)
 
-    dest.write_bytes(payload)
-    typer.secho(f"installed {dest} ({len(payload):,} bytes, sha256 verified)", fg=typer.colors.GREEN)
+    if failures:
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------- doctor
