@@ -1,7 +1,7 @@
 # Morpheus
 
 A local-first, single-user research platform for testing whether auditory cues
-can increase lucid-dream frequency — and, just as importantly, for finding out
+can increase lucid-dream frequency and, just as importantly, for finding out
 honestly when they cannot.
 
 **Status: M0 (feasibility probe).** Morpheus currently records and reports. It
@@ -19,7 +19,7 @@ is deliberately not the obvious one and the reasoning matters.
 Stated first, because the honesty is the point of the project:
 
 - It **does not measure sleep stages** and cannot confirm REM sleep. A silicon
-  camera cannot see the pupil through a closed eyelid — the published work that
+  camera cannot see the pupil through a closed eyelid  the published work that
   achieves this uses short-wave infrared (0.9–1.7 μm) on InGaAs sensors.
 - It **does not guarantee** lucid dreams, or claim that any observed movement
   indicates dreaming.
@@ -38,7 +38,7 @@ The evidence-backed component of this system is the cue-conditioning protocol,
 not the sensing. Targeted Lucidity Reactivation has raised lucid-dream frequency
 in controlled trials using *purely scheduled* audio cues with no sleep sensing
 at all. Meanwhile, camera-based sleep staging tops out near 73% accuracy, and
-gets there from cardiorespiratory signals and gross motion — not eye movement.
+gets there from cardiorespiratory signals and gross motion  not eye movement.
 
 So Morpheus inverts the obvious design. The camera's first job is **gate and
 guard**: suppress a cue while the body is moving, and detect probable arousal
@@ -94,7 +94,7 @@ that fail silently otherwise:
   changed nothing. Auto-exposure hunting in a dark room appears as motion in
   every downstream feature;
 - **the quality distribution** against the configured floor, because the quality
-  gate also gates face detection — a mis-tuned floor produces a zero-coverage
+  gate also gates face detection  a mis-tuned floor produces a zero-coverage
   night that looks exactly like a genuine finding;
 - **the sleep assertion**, because a laptop that suspends at 02:00 leaves an
   invisible hole rather than a short night.
@@ -102,7 +102,7 @@ that fail silently otherwise:
 ### Hardware
 
 M0 needs roughly $60: a USB IR camera **with manual exposure control** (verify
-before buying — the built-in FaceTime camera does not have it), an 850 nm
+before buying  the built-in FaceTime camera does not have it), an 850 nm
 illuminator, a rigid mount, and a bedside speaker. Nothing else should be bought
 until M1 passes. Full costing in `docs/design.md` §26.
 
@@ -111,7 +111,7 @@ until M1 passes. Full costing in `docs/design.md` §26.
 ```bash
 .venv/bin/pytest -q
 
-# Soak harness — required before the first cueing night, and worth running
+# Soak harness  required before the first cueing night, and worth running
 # before the first overnight probe. Loops a clip for the full duration and
 # reports peak RSS, so a leak that only surfaces at hour six is visible here
 # rather than at 04:00.
@@ -121,7 +121,7 @@ morpheus record --replay clip.mp4 --loop --hours 8
 The suite covers the coverage gate exhaustively (it produces the number that
 decides the project's direction), the aggregation arithmetic, and fault
 injection for every overnight failure mode: camera loss, USB reset, clock gaps
-from system suspend, and mid-run crashes. The invariant is always the same —
+from system suspend, and mid-run crashes. The invariant is always the same 
 **fail quiet, never loud.**
 
 One thing the tests deliberately cannot cover: YuNet does not fire on synthetic
