@@ -228,6 +228,104 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX idx_reports_session ON reports(session_id);
         """,
     ),
+    (
+        3,
+        """
+        -- M3-M6: experiments, validation, and the adaptive layer.
+
+        CREATE TABLE experiments (
+            id                INTEGER PRIMARY KEY,
+            name              TEXT    NOT NULL UNIQUE,
+            seed              INTEGER NOT NULL,
+            design            TEXT    NOT NULL,
+            repeats_per_block INTEGER NOT NULL,
+            plan_fingerprint  TEXT    NOT NULL,
+            preregistration   TEXT,
+            prereg_sha256     TEXT,
+            created_at        TEXT    NOT NULL,
+            started_at        TEXT,
+            ended_at          TEXT,
+            status            TEXT    NOT NULL DEFAULT 'draft'
+        );
+
+        -- One row per night. The arm is stored obfuscated so that browsing the
+        -- database does not reveal it; see experiment/blinding.py for why that
+        -- is deliberately not called encryption.
+        CREATE TABLE assignments (
+            id             INTEGER PRIMARY KEY,
+            experiment_id  INTEGER NOT NULL REFERENCES experiments(id),
+            night_index    INTEGER NOT NULL,
+            assigned_date  TEXT,
+            arm_sealed     TEXT    NOT NULL,
+            block_index    INTEGER NOT NULL,
+            session_id     INTEGER REFERENCES sessions(id),
+            revealed_at    TEXT,
+            UNIQUE (experiment_id, night_index)
+        );
+        CREATE UNIQUE INDEX idx_assignment_date
+            ON assignments(experiment_id, assigned_date)
+            WHERE assigned_date IS NOT NULL;
+
+        -- Every unsealing, including illegitimate ones. Blinding cannot be
+        -- enforced against the person holding the machine, so the design goal
+        -- is that breaking it is *visible* rather than impossible.
+        CREATE TABLE reveal_audit (
+            id            INTEGER PRIMARY KEY,
+            assignment_id INTEGER NOT NULL REFERENCES assignments(id),
+            revealed_at   TEXT    NOT NULL,
+            reason        TEXT    NOT NULL,
+            legitimate    INTEGER NOT NULL,
+            report_exists INTEGER NOT NULL
+        );
+
+        -- M4: the go/no-go record for H1. G9 (eye-movement-timed cueing) reads
+        -- this table and refuses to activate without a passing row.
+        CREATE TABLE validation_results (
+            id                INTEGER PRIMARY KEY,
+            created_at        TEXT    NOT NULL,
+            hypothesis        TEXT    NOT NULL,
+            reference_source  TEXT    NOT NULL,
+            nights_used       INTEGER NOT NULL,
+            held_out_nights   INTEGER NOT NULL,
+            auc               REAL,
+            auc_ci_low        REAL,
+            auc_ci_high       REAL,
+            brier             REAL,
+            threshold         REAL    NOT NULL,
+            passed            INTEGER NOT NULL,
+            model_version     TEXT,
+            metrics_json      TEXT,
+            notes             TEXT
+        );
+
+        -- M5: persisted bandit posteriors, so learning survives a restart.
+        CREATE TABLE policy_state (
+            id            INTEGER PRIMARY KEY,
+            policy_name   TEXT    NOT NULL,
+            arm_key       TEXT    NOT NULL,
+            successes     REAL    NOT NULL DEFAULT 0,
+            failures      REAL    NOT NULL DEFAULT 0,
+            pulls         INTEGER NOT NULL DEFAULT 0,
+            updated_at    TEXT    NOT NULL,
+            UNIQUE (policy_name, arm_key)
+        );
+
+        -- M5: what the incumbent policy would have chosen, recorded alongside
+        -- what was actually chosen. Without this there is no way to tell
+        -- whether the bandit beat the heuristic it replaced.
+        CREATE TABLE counterfactuals (
+            id             INTEGER PRIMARY KEY,
+            cue_id         INTEGER REFERENCES cues(id),
+            t_mono         REAL    NOT NULL,
+            chosen_policy  TEXT    NOT NULL,
+            chosen_arm     TEXT    NOT NULL,
+            baseline_arm   TEXT,
+            baseline_policy TEXT,
+            agreed         INTEGER,
+            context_json   TEXT
+        );
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)
