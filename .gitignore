@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+build/
+dist/
+
+# Model weights are fetched by `morpheus setup-models`, not vendored.
+models/*.onnx
+
+# Recorded data never enters version control. It is sleep data.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.mp4
+*.avi

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "morpheus"
+version = "0.1.0.dev0"
+description = "Local-first N-of-1 research platform for auditory lucid-dream cueing"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+
+# M0 dependency set. Deliberately minimal: every entry is justified in
+# docs/design.md §8. FastAPI, scikit-learn and sounddevice arrive in M2+;
+# PyTorch is explicitly out of scope until M4 passes (design.md §11).
+dependencies = [
+    "opencv-python>=4.10",  # capture, quality metrics, YuNet presence, motion
+    "numpy>=2.0",           # feature math
+    "pydantic>=2.7",        # typed config + feature frames
+    "typer>=0.12",          # CLI
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "hypothesis>=6"]
+
+[project.scripts]
+morpheus = "morpheus.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning:morpheus.*"]
