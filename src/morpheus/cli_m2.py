@@ -21,6 +21,8 @@ from .config import MorpheusConfig
 from .cue.controller import CueController, ControllerConfig
 from .cue.policy import ScheduledPolicy
 from .cue.safety import SafetyLimits, SafetySupervisor
+from .report.safety_monitor import check as check_sleep_quality
+from .report.safety_monitor import format_check
 from .report.schema import PRIMARY_OUTCOME_DEFINITION, MorningReport, ReportStore, today_str
 from .runtime.night import NightRunner
 from .runtime.power import SleepPreventer
@@ -270,6 +272,23 @@ def night(
         if not typer.confirm("Continue anyway?", default=False):
             raise typer.Exit(1)
 
+    # Design.md §23 stopping rule, enforced before arming rather than during
+    # the night. Halting a study is a decision made awake with the numbers in
+    # front of you, not something to discover at 04:00.
+    quality = check_sleep_quality(conn)
+    if quality.should_halt and not dry_run:
+        typer.secho("\n" + format_check(quality), fg=typer.colors.RED)
+        typer.secho(
+            "\nCueing is halted by the pre-registered sleep-quality rule. This is not\n"
+            "advisory: the pre-registration commits to it, and overriding it makes that\n"
+            "document false. Take some nights off cueing and keep journalling.",
+            fg=typer.colors.RED,
+        )
+        conn.close()
+        raise typer.Exit(2)
+    if quality.warning:
+        typer.secho("\n" + format_check(quality), fg=typer.colors.YELLOW)
+
     limits = SafetyLimits()
     if delay_hours is not None:
         limits.min_delay_s = delay_hours * 3600
@@ -490,6 +509,12 @@ def baseline(config_path: Optional[Path] = typer.Option(None, "--config")) -> No
     if stats["nights"] < 14:
         typer.echo("")
         typer.echo(f"  {14 - stats['nights']} more nights for a usable pre-intervention baseline.")
+
+    conn2 = connect(config.storage.db_path, read_only=True)
+    quality = check_sleep_quality(conn2)
+    conn2.close()
+    typer.echo("")
+    typer.echo(format_check(quality))
 
 
 def _wrap(text: str, width: int) -> list[str]:

@@ -290,3 +290,58 @@ def test_dry_run_plays_no_audio(conn, config: MorpheusConfig, registry, make_vid
     assert sink.played == [], "dry run must produce no audio"
     rows = CueStore(conn).cues_for_session(session_id)
     assert all(row["played"] == 0 and row["error"] == "dry_run" for row in rows)
+
+
+# ------------------------------------------------- sleep-quality stopping rule
+
+
+def test_stopping_rule_needs_history_before_judging(conn) -> None:
+    from morpheus.report.safety_monitor import check
+
+    store = ReportStore(conn)
+    for day in range(1, 6):
+        store.submit(MorningReport(report_date=f"2026-08-0{day}", sleep_quality=2))
+    result = check(conn)
+    assert not result.should_halt
+    assert "need" in result.reason
+
+
+def test_stopping_rule_fires_on_a_sustained_decline(conn) -> None:
+    """Design.md §23 rule 5, which the pre-registration promises to any reader.
+
+    It was missing until an audit caught it — the document committed to a
+    safety behaviour the code did not implement, which is worse than not having
+    the rule, because a stated guarantee nobody checks is one a participant
+    trusts for nothing.
+    """
+    from morpheus.report.safety_monitor import DECLINE_NIGHTS, check
+
+    store = ReportStore(conn)
+    scores = [5, 5, 5, 5] + [5, 4, 4, 3, 3, 2, 2, 1]
+    for index, score in enumerate(scores, start=1):
+        store.submit(MorningReport(report_date=f"2026-08-{index:02d}", sleep_quality=score))
+
+    result = check(conn)
+    assert result.consecutive_declines >= DECLINE_NIGHTS
+    assert result.should_halt
+    assert "consecutive nights" in result.reason
+
+
+def test_stopping_rule_resets_on_a_good_night(conn) -> None:
+    """One recovered night breaks the run; the rule targets sustained decline."""
+    from morpheus.report.safety_monitor import check
+
+    store = ReportStore(conn)
+    scores = [5, 4, 4, 3, 3, 2, 5, 4, 4, 3, 3, 3]
+    for index, score in enumerate(scores, start=1):
+        store.submit(MorningReport(report_date=f"2026-08-{index:02d}", sleep_quality=score))
+    assert not check(conn).should_halt
+
+
+def test_stable_good_sleep_does_not_halt(conn) -> None:
+    from morpheus.report.safety_monitor import check
+
+    store = ReportStore(conn)
+    for index, score in enumerate([4, 5, 4, 5, 4, 4, 5, 4, 5, 4, 4, 5], start=1):
+        store.submit(MorningReport(report_date=f"2026-08-{index:02d}", sleep_quality=score))
+    assert not check(conn).should_halt
