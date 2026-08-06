@@ -115,6 +115,11 @@ def doctor(
         False, help="Permit auto-exposure. Daylight development only."
     ),
     probe_seconds: float = typer.Option(3.0, help="Duration of the exposure stability probe."),
+    write_config: Optional[Path] = typer.Option(
+        None,
+        "--write-config",
+        help="Write a config file with the focus floor calibrated to this camera.",
+    ),
 ) -> None:
     """Check the rig before trusting it with a night.
 
@@ -195,6 +200,8 @@ def doctor(
         ok = False
 
     ok = _check_quality_calibration(source, config) and ok
+    if write_config is not None:
+        _write_calibrated_config(source, config, write_config)
     source.close()
 
     db_path = config.storage.db_path
@@ -383,26 +390,77 @@ def _check_quality_calibration(source: WebcamSource, config: MorpheusConfig) -> 
     scores.sort()
     focuses.sort()
     median = scores[len(scores) // 2]
+    median_focus = focuses[len(focuses) // 2]
     passing = sum(1 for s in scores if s >= config.quality.min_score) / len(scores)
 
     typer.echo(
         f"  quality probe      median score {median:.3f}, "
-        f"median focus {focuses[len(focuses) // 2]:.1f} "
+        f"median focus {median_focus:.1f} "
         f"(floor {config.quality.min_focus:.1f})"
     )
     typer.echo(f"                     {passing * 100:.0f}% of frames clear the quality gate")
 
-    if passing < 0.5:
-        typer.secho(
-            "                     Most frames would be discarded before face detection\n"
-            "                     even runs, and the night would report as zero coverage\n"
-            "                     for the wrong reason. Add IR illumination, or lower\n"
-            "                     quality.min_focus — but lower it now, deliberately, and\n"
-            "                     not after seeing a disappointing coverage number.",
-            fg=typer.colors.RED,
-        )
-        return False
-    return True
+    if passing >= 0.5:
+        return True
+
+    # Recommend a floor at a quarter of the observed median: low enough to pass
+    # this scene comfortably and a dimmer one later, high enough to still reject
+    # a blank or black frame, which reads near zero.
+    suggested = max(0.5, round(median_focus / 4.0, 1))
+    typer.secho(
+        "                     Most frames would be discarded before face detection\n"
+        "                     even runs, and the night would report as zero coverage\n"
+        "                     for the wrong reason rather than as a real finding.",
+        fg=typer.colors.RED,
+    )
+    typer.echo(
+        f"                     Suggested quality.min_focus for this camera: {suggested}\n"
+        f"                     Apply it with:  morpheus doctor --write-config morpheus.json\n"
+        f"                     then pass --config morpheus.json to record and report.\n"
+        f"                     Change it now, deliberately — not after seeing a\n"
+        f"                     disappointing coverage number."
+    )
+    return False
+
+
+def _write_calibrated_config(
+    source: WebcamSource, config: MorpheusConfig, path: Path
+) -> None:
+    """Persist a config with the focus floor calibrated to this camera.
+
+    Absolute Laplacian variance does not port across cameras or lighting, so a
+    population default is always a guess. This records a measured one.
+
+    It is still only an interim measure: the probe runs on a lit scene with the
+    user awake and present, and an IR bedroom at 03:00 is a very different
+    image. The sleep-baseline calibration in M1 is what sets these thresholds
+    from overnight quantiles (design.md §13.2), which is the only version of
+    this that is actually principled.
+    """
+    from .vision.quality import QualityAssessor
+
+    assessor = QualityAssessor(config.quality)
+    focuses = []
+    for _ in range(90):
+        frame = source.read()
+        if frame is not None:
+            focuses.append(assessor.assess(frame.image).focus)
+
+    if not focuses:
+        typer.secho(f"  config             no frames captured; not written", fg=typer.colors.RED)
+        return
+
+    focuses.sort()
+    median_focus = focuses[len(focuses) // 2]
+    config.quality.min_focus = max(0.5, round(median_focus / 4.0, 1))
+
+    path.write_text(config.model_dump_json(indent=2))
+    typer.secho(
+        f"  config             wrote {path} with quality.min_focus="
+        f"{config.quality.min_focus} (median focus {median_focus:.1f})",
+        fg=typer.colors.GREEN,
+    )
+    typer.echo(f"                     use it with:  --config {path}")
 
 
 def main() -> None:

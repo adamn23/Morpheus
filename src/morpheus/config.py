@@ -63,7 +63,22 @@ class QualityConfig(BaseModel):
     max_luminance: float = 245.0
     max_saturated_fraction: float = 0.15
     max_underexposed_fraction: float = 0.85
-    min_focus: float = 12.0  # variance of Laplacian
+    # Variance of the Laplacian, measured AFTER a 3x3 Gaussian blur (see
+    # vision/quality.py). The blur suppresses sensor noise, which would
+    # otherwise make a dark high-gain IR frame score as well focused — but it
+    # also divides the scale by roughly 20x, so this floor is not comparable to
+    # an unblurred Laplacian variance and must not be reasoned about as one.
+    #
+    # Calibrated against measurement rather than intuition: a well-exposed
+    # indoor scene on a 720p webcam reads ~8, a textured synthetic scene ~17,
+    # and a blank or black frame ~0. A floor of 2.0 rejects genuinely empty
+    # frames while leaving headroom for a much dimmer IR bedroom.
+    #
+    # This is still a population default and absolute Laplacian variance does
+    # not port across cameras or lighting. The sleep-baseline calibration
+    # (design.md §13.2) is what eventually sets it from the user's own
+    # overnight quantiles; `morpheus doctor --write-config` is the interim.
+    min_focus: float = 2.0
     scene_change_threshold: float = 0.35  # above => treat as camera moved
     min_score: float = 0.35  # composite floor for "usable"
 

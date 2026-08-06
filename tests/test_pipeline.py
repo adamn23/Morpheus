@@ -192,3 +192,49 @@ def test_scene_change_low_for_localised_movement(config: MorpheusConfig) -> None
     img = gray_frame(value=40)
     cv2.rectangle(img, (10, 10), (40, 40), (200, 200, 200), -1)
     assert assessor.assess(img).scene_change < 0.2
+
+
+def test_realistic_scene_clears_the_quality_gate(config: MorpheusConfig) -> None:
+    """Regression guard for a scale mismatch that shipped and reached a user.
+
+    quality.py measures Laplacian variance AFTER a 3x3 Gaussian blur, which
+    suppresses sensor noise but also divides the scale by roughly 20x. The blur
+    was added without rescaling quality.min_focus, so the floor was left
+    calibrated for the unblurred scale. Every frame from a perfectly good
+    camera scored ~0.13 and was discarded before face detection ran, which
+    would have produced a zero-coverage night indistinguishable from the real
+    finding M0 exists to make.
+
+    None of the existing tests caught it: they asserted that bad frames fail,
+    never that a good one passes. This asserts the other direction.
+    """
+    import cv2
+
+    rng = np.random.default_rng(0)
+    img = np.zeros((720, 1280), np.uint8)
+    img[:] = np.linspace(60, 180, 1280).astype(np.uint8)
+    for _ in range(40):
+        x, y = int(rng.integers(0, 1200)), int(rng.integers(0, 680))
+        cv2.rectangle(img, (x, y), (x + 60, y + 40), int(rng.integers(20, 230)), -1)
+    img = np.clip(
+        img.astype(np.int16) + rng.integers(-6, 7, img.shape), 0, 255
+    ).astype(np.uint8)
+
+    metrics = QualityAssessor(config.quality).assess(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR))
+
+    assert metrics.focus > config.quality.min_focus, (
+        f"a well-exposed textured scene scored focus {metrics.focus:.1f} against a "
+        f"floor of {config.quality.min_focus}; the floor and the blur are out of sync"
+    )
+    assert metrics.score >= config.quality.min_score, (
+        f"a well-exposed textured scene scored {metrics.score:.3f}, below the "
+        f"{config.quality.min_score} gate — real footage would be silently discarded"
+    )
+
+
+def test_blank_frame_still_fails_the_focus_floor(config: MorpheusConfig) -> None:
+    """The floor must stay strict enough to reject a featureless frame."""
+    flat = np.full((720, 1280, 3), 120, np.uint8)
+    metrics = QualityAssessor(config.quality).assess(flat)
+    assert metrics.focus < config.quality.min_focus
+    assert metrics.score < config.quality.min_score
