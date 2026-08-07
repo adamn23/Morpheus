@@ -116,3 +116,67 @@ your left side" was performed in front of a laptop, not in bed.
 The protocol conflated two questions needing two camera positions. Posture
 segments only mean anything from the camera's real overnight mount. They are now
 split into a separate stage and must be re-run with the IR camera in place.
+
+---
+
+# Outcome: the re-run, 2026-08-07
+
+| Run | Baseline flow | Saccade AUC | Head-turn AUC |
+|---|---|---|---|
+| 1 (broken instrument) | 0.2466 | 0.671 | 0.955 |
+| 2 (after the fix) | 0.2692 | **0.494** | 0.817 |
+
+Against the criteria fixed above:
+
+- **V1 — unmeasurable.** The coherence metric was added to `EyeFlowSample` but
+  never plumbed into the calibration profile, so the criterion that depends on
+  it could not be evaluated. An oversight, recorded rather than glossed.
+- **V2 — failed.** Head-turn AUC (0.817) remains well above saccade AUC (0.494).
+  The index still separates head motion far better than eye motion.
+- **Gate — 0.494.** Chance.
+
+## Why this reads as a genuine negative rather than more instrument trouble
+
+**The baseline did not move.** The fix cut the synthetic noise floor five- to
+tenfold; on real footage it changed 0.2466 to 0.2692, which is nothing.
+
+That is the informative result. It means the floor was never sensor noise. It is
+coherent motion in the eye region during deliberate stillness — micro head
+movement, pulse, landmark jitter — and no amount of denoising removes something
+that is not noise.
+
+This matches the physics the design started from. Gross head movement is a large,
+coherent, easily resolved signal, and it is still detected at 0.817.
+Sub-millimetre lid-surface deformation from a cornea moving beneath a closed lid
+is not resolvable at ~50 cm through a silicon sensor. The camera sees the head
+and not the eyes.
+
+The saccade AUC also *fell*, 0.671 to 0.494. The higher figure in run 1 was head
+motion leaking into the measure; removing the leak removed the apparent signal
+with it. Two independent runs now agree, and they agree with the physics.
+
+## Decision
+
+**H1 is not supported. Camera-based eye tracking ends here.**
+
+Per the one-re-run rule fixed above, this is not an invitation to keep adjusting.
+A further hypothesis does exist — landmark jitter below the 0.3 px no-warp
+threshold, uncorrected, presenting as coherent flow — and it was deliberately not
+pursued. It would have been the third adjustment after two failures against a
+signal measuring at chance, which is the precise behaviour the pre-commitment
+was written to prevent.
+
+## What this does and does not invalidate
+
+Ends: eye-movement detection from a camera. G9 stays permanently locked; the
+lock in `cue/sensor_timing.py` needs no change, having done its job.
+
+Survives, untouched: the conditioning protocol, the cue engine and its safety
+supervisor, the morning report, the blinded N-of-1 harness, the adaptive layer,
+and the reference-validation machinery, which is sensor-agnostic and will accept
+EEG or a contact sensor without modification. The camera remains useful as a
+gross-motion arousal guard, which is what design.md §8 recommended it for before
+any of this was measured.
+
+The cost of finding out was two calibration sessions of about three minutes each.
+That was the point of putting the gate first.
