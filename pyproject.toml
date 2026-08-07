@@ -8,7 +8,13 @@ version = "0.1.0.dev0"
 description = "Local-first N-of-1 research platform for auditory lucid-dream cueing"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "AGPL-3.0-or-later"
+# PEP 639 forbids "License ::" classifiers alongside a license expression;
+# the expression below is the licence declaration. "Private :: Do Not Upload"
+# is not a real classifier but PyPI rejects any package carrying it, which is
+# the point: this is proprietary and must never be published by accident.
+classifiers = ["Private :: Do Not Upload"]
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 
 # Every entry is justified in docs/design.md §8. PyTorch remains explicitly
 # out of scope until M4 passes with labelled reference data (design.md §11):

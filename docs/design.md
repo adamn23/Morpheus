@@ -1,7 +1,11 @@
 # Morpheus — System Design Document v0.1
 
 **Status:** Design for review. No code written.
-**Repository:** `/Users/adam/Morpheus` — empty except AGPL-3.0 `LICENSE`, one commit (`077e789`), remote `github.com/adamn23/Morpheus`. Nothing to reuse; this is a greenfield design.
+**Repository:** `/Users/adam/Morpheus` — empty except a `LICENSE`, one commit (`077e789`), remote `github.com/adamn23/Morpheus`. Nothing to reuse; this is a greenfield design.
+
+> **Licensing note (updated 2026-08-07).** The project was initially AGPL-3.0 and is now
+> All Rights Reserved. Passages below written against the original licence have been
+> corrected; the architecture and evidence review are unaffected.
 
 ---
 
@@ -673,7 +677,7 @@ Sleep video of a person in their bedroom is among the most sensitive data a hobb
 
 - **No raw video is persisted, ever, by default.** Frames are processed in memory and discarded. This is enforced structurally: no code path in the daemon writes image data, and a test asserts it.
 - **Calibration clips** are the sole exception: explicitly consented, retained only if the user opts in, encrypted, auto-expiring (default 30 days), with a one-click purge.
-- **All data local.** No cloud, no telemetry, no crash reporting, no model API calls containing dream narratives. AGPL-3.0 already reinforces the intent.
+- **All data local.** No cloud, no telemetry, no crash reporting, no model API calls containing dream narratives. The proprietary licence reinforces the intent, but the guarantee is structural rather than legal: the code contains no network egress path for recorded data.
 - **Encryption at rest** for narratives and condition assignments; SQLite file on an encrypted volume (FileVault is a prerequisite, documented in setup).
 - **Bed partners:** you sleep alone, so this is moot today — but the camera must refuse to run if it detects a second person during framing check, or at minimum surface an explicit consent prompt. Recording another person while they sleep, without consent, is not a design detail.
 - **Export and delete** are first-class: full JSON/CSV export, and a genuine hard-delete (VACUUM, not tombstones).

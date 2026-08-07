@@ -1,0 +1,43 @@
+Copyright (c) 2026 adamn23. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software, including its source code, documentation, designs, data
+schemas, and all associated materials (the "Software"), is the proprietary
+and confidential property of the copyright holder.
+
+No licence, express or implied, is granted. Without the prior written
+permission of the copyright holder you may not:
+
+  1. use, execute, or run the Software;
+  2. copy, reproduce, or store the Software in any medium;
+  3. modify, adapt, translate, or create derivative works of the Software;
+  4. distribute, publish, sublicense, sell, rent, lease, or otherwise
+     transfer the Software or any part of it;
+  5. reverse engineer, decompile, or disassemble the Software, except to
+     the extent such restriction is prohibited by applicable law;
+  6. remove or alter this notice or any proprietary marking.
+
+Viewing this repository does not grant any of the rights above.
+
+THIRD-PARTY COMPONENTS
+
+The Software depends on third-party packages distributed under their own
+licences (including Apache-2.0, BSD, and MIT terms). Those licences govern
+those components and are not affected by this notice. Model weights used at
+runtime are downloaded separately and remain subject to their own terms.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
+OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+NOT A MEDICAL DEVICE
+
+The Software is experimental research tooling. It does not diagnose, treat,
+or monitor any medical condition, does not measure sleep stages, and must
+not be relied upon for any clinical or safety-critical purpose.
