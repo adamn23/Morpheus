@@ -130,7 +130,9 @@ def test_auc_needs_enough_samples() -> None:
 
 
 def test_strong_signal_passes_the_gate() -> None:
-    profile = build_profile(collected(separation=4.0))
+    data = collected(separation=4.0)
+    data["head_turn"] = samples(np.full(600, 1.0))  # V2 needs the confound segment
+    profile = build_profile(data)
     assert profile.positive_control_auc > POSITIVE_CONTROL_AUC_PASS
     assert profile.verdict == "PASS"
 
@@ -217,7 +219,9 @@ def test_failure_text_forbids_tuning_and_retrying() -> None:
 
 
 def test_profile_round_trips_through_the_database(conn) -> None:
-    profile = build_profile(collected(separation=4.0))
+    data = collected(separation=4.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    profile = build_profile(data)
     save_profile(conn, profile)
     row = latest(conn)
     assert row is not None
