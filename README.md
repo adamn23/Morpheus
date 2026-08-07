@@ -1,4 +1,7 @@
 # Morpheus
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-experimental-orange)
 
 A local-first, single-user research platform for testing whether auditory cues
 can increase lucid-dream frequency and, just as importantly, for finding out
