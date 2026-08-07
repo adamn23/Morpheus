@@ -117,3 +117,80 @@ Any change after the first confirmation recording must be recorded here with its
 date and reason, and invalidates the result.
 
 *(none)*
+
+---
+
+# Outcome — 2026-08-07, session 4
+
+**VERDICT: REPLICATED.** No deviations from the plan above.
+
+| | Session 3 (post-hoc) | Session 4 (confirmation) |
+|---|---|---|
+| Lid AUC, motion-gated | 0.909 | **0.931** |
+| 95% CI | [0.812, 0.983] | **[0.878, 0.972]** |
+| Windows | 45 v 22 | 60 v 39 |
+
+Pass rule was CI lower bound ≥ 0.80. Observed lower bound **0.878**.
+
+## Validity
+
+- **L1 — gate removes large head movement.** 24 of 25 head-turn windows excluded
+  (96%, required ≥ 80%). Median motion during head turns was 0.00143 against a
+  gate of 0.00068, so deliberate turns are cleanly separated by body motion
+  alone. **Pass.**
+- **L2 — small head movement is not mistaken for eye movement.** Micro-motion
+  AUC 0.783 against saccade AUC 0.931. **Pass.**
+
+## Breakdown
+
+| Segment | Windows | Survived gate | Median motion | Gated lid AUC |
+|---|---|---|---|---|
+| eyes_closed_still | 44 | 39 | 0.000529 | — |
+| slow_saccades | 45 | 28 | 0.000647 | 0.909 |
+| fast_saccades | 45 | 32 | 0.000614 | 0.950 |
+| micro_head_motion | 45 | 21 | 0.000691 | 0.783 |
+| head_turn | 25 | 1 | 0.001433 | — |
+
+## The caveat that matters, recorded because it passed rather than failed
+
+**Micro head motion scored 0.783.** It cleared L2 with a margin of 0.148, but in
+absolute terms small pillow-settling movements separate from stillness
+substantially on their own. A meaningful part of what this channel measures is
+head-driven; eye movement simply produces more of it.
+
+That margin was measured on a cooperative awake subject making the largest
+deliberate saccades they could, against gentle voluntary head movement. Asleep,
+the terms move in the wrong direction: eye movements are smaller and
+involuntary, while head movements are not obviously smaller. **The 0.148 margin
+is the number most likely to close during sleep**, and it should be the primary
+thing watched in the M4 reference validation.
+
+Noted also: the saccade segments carried ~22% more body motion than the baseline
+(0.00065 vs 0.00053), and only 28–32 of 45 saccade windows survived the gate
+against 39 of 44 baseline windows. Making large deliberate eye movements without
+any head movement is difficult. The gate handles it, but it is why the analysis
+is restricted to gated windows rather than run on everything.
+
+## What this establishes, and what it does not
+
+**Establishes:** a camera-derived measure of eyelid contour geometry
+discriminates deliberate closed-eye saccades from stillness, at 0.931, under
+criteria frozen before the data existed, with the pose confound explicitly
+tested and excluded. This is the first result in the project that is evidence
+rather than a hypothesis.
+
+**Does not establish:** anything about sleep. This is awake, cooperative,
+frontal, ~120 px interocular, well lit, with maximal voluntary saccades. Sleep
+is worse on every one of those axes, and the side-sleeping posture question is
+untested pending a bed-mounted camera.
+
+**G9 remains locked.** Sensor-timed cueing still requires M4 validation against
+a reference device, and nothing here changes that.
+
+## Consequences
+
+The M1 eye-movement branch is alive and the hardware spend is justified. The
+optical-flow channel remains dead — it scored 0.958 this session but failed its
+own V2 with a head-turn AUC of 0.997, so it is more head-contaminated than ever.
+Phase B's oblique-illumination work was aimed at rescuing flow; that priority is
+now wrong, and any further work should target lid geometry.
