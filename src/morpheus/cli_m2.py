@@ -549,6 +549,12 @@ def import_journal(
         False, help="Replace existing reports on the same dates."
     ),
     sample: int = typer.Option(3, help="How many parsed entries to show in the preview."),
+    year: Optional[int] = typer.Option(
+        None,
+        help="Year the journal STARTS in. Required for prose journals that write "
+        "dates inline as 'June 30:' without a year. The year rolls forward "
+        "automatically whenever the month goes backwards.",
+    ),
     untagged: str = typer.Option(
         "unscored",
         help="What an entry with no lucidity marker means: 'unscored' (excluded "
@@ -568,7 +574,7 @@ def import_journal(
 
     config = MorpheusConfig.load(config_path)
     try:
-        preview = scan(path)
+        preview = scan(path, base_year=year)
     except FileNotFoundError:
         typer.secho(f"not found: {path}", fg=typer.colors.RED)
         raise typer.Exit(1)
@@ -577,6 +583,14 @@ def import_journal(
 
     if not preview.usable:
         typer.secho("\nnothing importable was found", fg=typer.colors.RED)
+        if year is None:
+            typer.echo(
+                "\nIf your journal is continuous prose with inline dates like\n"
+                "  June 30: Basically I was...\n"
+                "then it has no year for the parser to read. Pass the year the\n"
+                "journal starts in:\n"
+                f"  morpheus import-journal {path} --year 2025"
+            )
         raise typer.Exit(1)
 
     if not commit:
@@ -606,6 +620,7 @@ def import_journal(
                 report_date=entry.entry_date,
                 narrative=entry.narrative,
                 lucid_binary=lucid,
+                dreams_recalled=entry.dreams_recalled,
                 # Deliberately left unset: these entries predate the protocol,
                 # so inventing recall counts or vividness scores for them would
                 # manufacture data that was never collected.

@@ -67,6 +67,17 @@ _POSITIVE = ("hashtag", "bracket", "field_yes", "standalone", "checkbox")
 
 _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
+#: Inline date headers: "June 30:", "Jul 1 -", "December 25:".
+#: A running journal kept as continuous prose marks days this way rather than
+#: with Markdown headings, and almost never writes the year — it is obvious to
+#: the author and invisible to a parser.
+_INLINE_DATE = re.compile(
+    r"^[ \t]*(January|February|March|April|May|June|July|August|September|"
+    r"October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)"
+    r"\.?[ \t]+(\d{1,2})[ \t]*[:\-\u2013]",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 
 @dataclass
 class ParsedEntry:
@@ -76,6 +87,7 @@ class ParsedEntry:
     lucid_evidence: list[str] = field(default_factory=list)
     date_source: str = ""
     source_file: str = ""
+    dreams_recalled: Optional[int] = None
 
     @property
     def usable(self) -> bool:
@@ -199,6 +211,61 @@ def parse_text(text: str, *, fallback_date: Optional[str] = None, source: str = 
     )
 
 
+def split_dated_prose(text: str, base_year: int) -> list[tuple[str, str]]:
+    """Split a continuous prose journal on inline date headers.
+
+    Returns (iso_date, body) pairs. Anything before the first header — a title,
+    a "Prev: June 10-29" note — is discarded.
+
+    The year is not written in this format, so it is carried forward from
+    `base_year` and incremented whenever the month goes backwards. A journal
+    running June to February therefore lands in two calendar years without the
+    author having to annotate anything. Entries must be in chronological order
+    for this to hold, which is how a running journal is written.
+    """
+    matches = list(_INLINE_DATE.finditer(text))
+    if len(matches) < 2:
+        return []
+
+    out: list[tuple[str, str]] = []
+    year = base_year
+    previous_month = 0
+
+    for index, match in enumerate(matches):
+        month = _month_lookup(match.group(1))
+        day = int(match.group(2))
+        if month is None:
+            continue
+
+        # Validate before committing the rollover state. An unparseable date
+        # such as "February 31" must not advance the year, or a single typo
+        # shifts every entry after it by twelve months — and silently, since
+        # the dates that follow are all individually plausible.
+        candidate_year = year + 1 if month < previous_month else year
+        try:
+            iso = date(candidate_year, month, day).isoformat()
+        except ValueError:
+            continue
+        year, previous_month = candidate_year, month
+
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[match.end():end].strip()
+        if body:
+            out.append((iso, body))
+    return out
+
+
+def count_dreams(body: str) -> int:
+    """Separate dreams in one night's entry, counted as paragraphs.
+
+    A night with three recalled dreams is written as three paragraphs under one
+    date. That is worth capturing: dreams_recalled is a secondary outcome, and
+    deriving it costs nothing where the alternative is leaving it null.
+    """
+    paragraphs = [p for p in re.split(r"\n\s*\n", body) if p.strip()]
+    return max(1, len(paragraphs))
+
+
 def _split_combined(text: str) -> list[str]:
     """Split a single file into entries on dated Markdown headings."""
     lines = text.splitlines()
@@ -215,8 +282,12 @@ def _split_combined(text: str) -> list[str]:
     return chunks
 
 
-def scan(path: Path) -> ImportPreview:
-    """Parse a file or directory into a preview. Writes nothing."""
+def scan(path: Path, *, base_year: Optional[int] = None) -> ImportPreview:
+    """Parse a file or directory into a preview. Writes nothing.
+
+    `base_year` enables the prose-journal path, where dates are inline and the
+    year is never written.
+    """
     path = Path(path)
     preview = ImportPreview()
 
@@ -239,6 +310,28 @@ def scan(path: Path) -> ImportPreview:
             continue
 
         filename_date, _ = _find_date(file.stem)
+
+        # A running prose journal marks days inline ("June 30:") rather than
+        # with headings, and omits the year. Detected first, because the
+        # heading-based splitter cannot see those dates at all and would import
+        # the entire journal as one undated blob.
+        prose = split_dated_prose(text, base_year) if base_year else []
+        if prose:
+            for iso, body in prose:
+                lucid, evidence = detect_lucid(body)
+                raw_entries.append(
+                    ParsedEntry(
+                        entry_date=iso,
+                        narrative=body,
+                        lucid=lucid,
+                        lucid_evidence=evidence,
+                        date_source="inline prose header",
+                        source_file=file.name,
+                        dreams_recalled=count_dreams(body),
+                    )
+                )
+            continue
+
         # A file containing several dated headings holds several entries — the
         # common shape when a notes app exports a whole journal as one document.
         # A per-day export instead gets its date from the filename.

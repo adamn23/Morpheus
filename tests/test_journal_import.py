@@ -277,3 +277,100 @@ def test_progress_counts(conn) -> None:
 
     stats = progress(conn)
     assert stats == {"total": 5, "scored": 2, "remaining": 3, "lucid": 1}
+
+
+# ------------------------------- continuous prose journals with inline dates
+
+
+PROSE = """Dream Journal Part 2
+
+Prev: June 10-29
+
+June 30: Basically I dont remember much of this one, something about a game.
+
+Basically me and a friend are on a raft at night.
+
+Basically I am in a parking lot.
+
+July 1: Basically I am in some sort of house, it feels very small.
+
+Basically im standing on a road.
+
+July 2: Basically im in toronto at the eaton centre.
+"""
+
+
+def test_prose_journal_needs_a_year(tmp_path: Path) -> None:
+    """Inline dates like 'June 30:' carry no year, so scan must be told one.
+
+    Without it the whole journal imports as a single undated blob, which is
+    what happened on the first attempt at a real one.
+    """
+    write(tmp_path, "journal.md", PROSE)
+    assert scan(tmp_path).usable == []
+    assert len(scan(tmp_path, base_year=2025).usable) == 3
+
+
+def test_prose_journal_splits_on_inline_dates(tmp_path: Path) -> None:
+    write(tmp_path, "journal.md", PROSE)
+    entries = scan(tmp_path, base_year=2025).usable
+    assert [e.entry_date for e in entries] == ["2025-06-30", "2025-07-01", "2025-07-02"]
+    assert all(e.date_source == "inline prose header" for e in entries)
+
+
+def test_prose_preamble_is_discarded(tmp_path: Path) -> None:
+    """The title and a 'Prev: June 10-29' note are not a dream."""
+    write(tmp_path, "journal.md", PROSE)
+    entries = scan(tmp_path, base_year=2025).usable
+    assert not any("Dream Journal Part 2" in e.narrative for e in entries)
+    assert not any("Prev:" in e.narrative for e in entries)
+
+
+def test_paragraphs_become_the_recalled_dream_count(tmp_path: Path) -> None:
+    """Several dreams in one night are written as several paragraphs."""
+    write(tmp_path, "journal.md", PROSE)
+    entries = {e.entry_date: e for e in scan(tmp_path, base_year=2025).usable}
+    assert entries["2025-06-30"].dreams_recalled == 3
+    assert entries["2025-07-01"].dreams_recalled == 2
+    assert entries["2025-07-02"].dreams_recalled == 1
+
+
+def test_year_rolls_forward_when_the_month_goes_backwards() -> None:
+    """A journal running June to February spans two calendar years silently."""
+    from morpheus.report.importer import split_dated_prose
+
+    text = "Dec 20: winter entry.\n\nJan 3: new year entry.\n\nFeb 1: later.\n"
+    assert [d for d, _ in split_dated_prose(text, 2025)] == [
+        "2025-12-20", "2026-01-03", "2026-02-01",
+    ]
+
+
+def test_abbreviated_months_and_dash_separators() -> None:
+    from morpheus.report.importer import split_dated_prose
+
+    text = "Jun 30 - first entry.\n\nJul 1: second entry.\n\nSept 4 – third.\n"
+    assert [d for d, _ in split_dated_prose(text, 2025)] == [
+        "2025-06-30", "2025-07-01", "2025-09-04",
+    ]
+
+
+def test_impossible_dates_are_skipped_not_guessed() -> None:
+    from morpheus.report.importer import split_dated_prose
+
+    text = "June 30: real.\n\nFebruary 31: impossible.\n\nJuly 2: real again.\n"
+    assert [d for d, _ in split_dated_prose(text, 2025)] == ["2025-06-30", "2025-07-02"]
+
+
+def test_a_single_inline_date_is_not_treated_as_prose() -> None:
+    """One match is more likely a sentence than a journal structure."""
+    from morpheus.report.importer import split_dated_prose
+
+    assert split_dated_prose("I met her on June 30: it was raining.", 2025) == []
+
+
+def test_prose_dates_do_not_break_tagged_journals(tmp_path: Path) -> None:
+    """The heading-based path must still work when a year IS present."""
+    write(tmp_path, "j.md", "## 2026-06-01\n#lucid\nOne.\n\n## 2026-06-02\nTwo.")
+    preview = scan(tmp_path, base_year=2025)
+    assert [e.entry_date for e in preview.usable] == ["2026-06-01", "2026-06-02"]
+    assert preview.lucid_count == 1
