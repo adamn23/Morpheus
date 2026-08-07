@@ -500,6 +500,23 @@ def baseline(config_path: Optional[Path] = typer.Option(None, "--config")) -> No
     typer.echo(f"\nBaseline over {stats['nights']} reports")
     typer.echo("-" * 44)
     typer.echo(f"  nights scored        {stats['nights_scored']}")
+
+    if not stats["nights_scored"]:
+        # Printing "lucid nights 0" here would read as "you had no lucid
+        # dreams" when the truth is that nothing has been scored. Absence of
+        # data must not be reported as a finding.
+        typer.secho(
+            "\n  No entries have been scored for lucidity yet, so there is no\n"
+            "  baseline rate — this is NOT a rate of zero.\n\n"
+            "  Imported journals carry no lucidity value unless they were tagged.\n"
+            "  Score them with:  morpheus review",
+            fg=typer.colors.YELLOW,
+        )
+        if stats["mean_dreams_recalled"] is not None:
+            typer.echo(f"\n  mean dreams recalled {stats['mean_dreams_recalled']:.2f}"
+                       f"   (derived from paragraph counts)")
+        return
+
     typer.echo(f"  lucid nights         {stats['lucid_nights']}")
     if stats["lucid_rate_per_night"] is not None:
         typer.echo(f"  lucid rate           {stats['lucid_rate_per_night'] * 100:.1f}% of nights")

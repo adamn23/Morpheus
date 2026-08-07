@@ -340,32 +340,32 @@ def test_year_rolls_forward_when_the_month_goes_backwards() -> None:
     from morpheus.report.importer import split_dated_prose
 
     text = "Dec 20: winter entry.\n\nJan 3: new year entry.\n\nFeb 1: later.\n"
-    assert [d for d, _ in split_dated_prose(text, 2025)] == [
-        "2025-12-20", "2026-01-03", "2026-02-01",
-    ]
+    entries, _ = split_dated_prose(text, 2025)
+    assert [d for d, _ in entries] == ["2025-12-20", "2026-01-03", "2026-02-01"]
 
 
 def test_abbreviated_months_and_dash_separators() -> None:
     from morpheus.report.importer import split_dated_prose
 
     text = "Jun 30 - first entry.\n\nJul 1: second entry.\n\nSept 4 – third.\n"
-    assert [d for d, _ in split_dated_prose(text, 2025)] == [
-        "2025-06-30", "2025-07-01", "2025-09-04",
-    ]
+    entries, _ = split_dated_prose(text, 2025)
+    assert [d for d, _ in entries] == ["2025-06-30", "2025-07-01", "2025-09-04"]
 
 
 def test_impossible_dates_are_skipped_not_guessed() -> None:
     from morpheus.report.importer import split_dated_prose
 
     text = "June 30: real.\n\nFebruary 31: impossible.\n\nJuly 2: real again.\n"
-    assert [d for d, _ in split_dated_prose(text, 2025)] == ["2025-06-30", "2025-07-02"]
+    entries, warnings = split_dated_prose(text, 2025)
+    assert [d for d, _ in entries] == ["2025-06-30", "2025-07-02"]
+    assert any("unparseable" in w for w in warnings)
 
 
 def test_a_single_inline_date_is_not_treated_as_prose() -> None:
     """One match is more likely a sentence than a journal structure."""
     from morpheus.report.importer import split_dated_prose
 
-    assert split_dated_prose("I met her on June 30: it was raining.", 2025) == []
+    assert split_dated_prose("I met her on June 30: it was raining.", 2025)[0] == []
 
 
 def test_prose_dates_do_not_break_tagged_journals(tmp_path: Path) -> None:
@@ -374,3 +374,87 @@ def test_prose_dates_do_not_break_tagged_journals(tmp_path: Path) -> None:
     preview = scan(tmp_path, base_year=2025)
     assert [e.entry_date for e in preview.usable] == ["2026-06-01", "2026-06-02"]
     assert preview.lucid_count == 1
+
+
+def test_weekday_prefix_and_explicit_year(tmp_path: Path) -> None:
+    """A real journal switched format partway through the same file.
+
+    The earlier section was 'Tuesday Feb. 4 2025 - ...' with a weekday prefix
+    and the year written out; the later section was a bare 'June 10:'. The
+    original pattern required the month at line start with no year, so eleven
+    entries were silently dropped.
+    """
+    from morpheus.report.importer import split_dated_prose
+
+    text = (
+        "Tuesday Feb. 4 2025 - first.\n\n"
+        "Wednesday February 6, 2025: second.\n\n"
+        "Feb. 10th, 2025 - third.\n\n"
+        "June 10: later section, no year.\n"
+    )
+    entries, _ = split_dated_prose(text, 2026)
+    assert [d for d, _ in entries] == [
+        "2025-02-04", "2025-02-06", "2025-02-10", "2025-06-10",
+    ]
+
+
+def test_explicit_year_overrides_the_carried_year() -> None:
+    from morpheus.report.importer import split_dated_prose
+
+    entries, _ = split_dated_prose("Mar 1, 2024: a.\n\nApr 2, 2024: b.\n", 2026)
+    assert [d for d, _ in entries] == ["2024-03-01", "2024-04-02"]
+
+
+def test_small_backwards_step_is_a_typo_not_a_year_boundary() -> None:
+    """The failure that would have misdated thirteen real entries.
+
+    'June 7:' sat between 'July 6:' and 'July 8:' — plainly a slip for July 7.
+    A naive rule rolled the year and shifted everything after it into 2027,
+    silently, because each following date was individually plausible.
+    """
+    from morpheus.report.importer import split_dated_prose
+
+    entries, warnings = split_dated_prose("July 6: a.\n\nJune 7: b.\n\nJuly 8: c.\n", 2026)
+    assert [d for d, _ in entries] == ["2026-07-06", "2026-06-07", "2026-07-08"]
+    assert any("out of order" in w for w in warnings)
+
+
+def test_december_to_january_still_rolls_over() -> None:
+    from morpheus.report.importer import split_dated_prose
+
+    entries, warnings = split_dated_prose("Dec 28: a.\n\nJan 2: b.\n", 2026)
+    assert [d for d, _ in entries] == ["2026-12-28", "2027-01-02"]
+    assert any("rolled to 2027" in w for w in warnings)
+
+
+def test_repeated_date_headers_merge_into_one_night() -> None:
+    """Two dreams written under two identical headers, not as paragraphs.
+
+    report_date is unique, so leaving them separate silently drops the first.
+    """
+    from morpheus.report.importer import count_dreams, split_dated_prose
+
+    entries, _ = split_dated_prose(
+        "June 10: first dream.\n\nJune 10: second dream.\n\nJune 11: next night.\n", 2026
+    )
+    assert [d for d, _ in entries] == ["2026-06-10", "2026-06-11"]
+    assert count_dreams(entries[0][1]) == 2
+
+
+def test_baseline_stats_distinguish_unscored_from_zero(conn) -> None:
+    """An unscored journal must not read as a zero lucid rate.
+
+    Imported entries carry no lucidity value unless they were tagged, so a
+    freshly imported journal has nothing scored. Reporting that as a rate of
+    zero would be presenting absent data as a finding — and it would be the
+    baseline the whole N-of-1 comparison is measured against.
+    """
+    store = ReportStore(conn)
+    for day in range(1, 11):
+        store.submit(MorningReport(report_date=f"2026-06-{day:02d}", narrative="a dream"))
+
+    stats = store.baseline_stats()
+    assert stats["nights"] == 10
+    assert stats["nights_scored"] == 0
+    assert stats["lucid_rate_per_night"] is None, "must be None, never 0.0"
+    assert stats["lucid_per_week"] is None

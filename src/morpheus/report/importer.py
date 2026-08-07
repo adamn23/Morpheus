@@ -72,11 +72,25 @@ _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 #: with Markdown headings, and almost never writes the year — it is obvious to
 #: the author and invisible to a parser.
 _INLINE_DATE = re.compile(
-    r"^[ \t]*(January|February|March|April|May|June|July|August|September|"
+    r"^[ \t]*"
+    # Optional weekday prefix: "Tuesday Feb. 4 2025 - ..."
+    r"(?:(?:Mon|Tues?|Wed(?:nes)?|Thur?s?|Fri|Sat(?:ur)?|Sun)(?:day)?\.?,?[ \t]+)?"
+    r"(January|February|March|April|May|June|July|August|September|"
     r"October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)"
-    r"\.?[ \t]+(\d{1,2})[ \t]*[:\-\u2013]",
+    r"\.?[ \t]+(\d{1,2})(?:st|nd|rd|th)?"
+    # Optional explicit year, with or without a comma before it.
+    r"[ \t]*,?[ \t]*(\d{4})?"
+    r"[ \t]*[:\-\u2013]",
     re.IGNORECASE | re.MULTILINE,
 )
+
+#: A backwards month step this large is taken as a real year boundary
+#: (December to January is -11). Anything smaller is treated as an
+#: out-of-order entry or a typo, because in a journal written most days a
+#: genuine twelve-month gap between consecutive entries is far less likely
+#: than a slip of the pen — and the cost of guessing wrong is every
+#: subsequent entry landing a year out.
+_ROLLOVER_MIN_DECREASE = 6
 
 
 @dataclass
@@ -101,6 +115,7 @@ class ImportPreview:
     duplicates: dict[str, int] = field(default_factory=dict)
     files_scanned: int = 0
     pattern_hits: dict[str, int] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def usable(self) -> list[ParsedEntry]:
@@ -211,48 +226,85 @@ def parse_text(text: str, *, fallback_date: Optional[str] = None, source: str = 
     )
 
 
-def split_dated_prose(text: str, base_year: int) -> list[tuple[str, str]]:
+def split_dated_prose(
+    text: str, base_year: int
+) -> tuple[list[tuple[str, str]], list[str]]:
     """Split a continuous prose journal on inline date headers.
 
-    Returns (iso_date, body) pairs. Anything before the first header — a title,
-    a "Prev: June 10-29" note — is discarded.
+    Returns ((iso_date, body) pairs, warnings). Anything before the first
+    header — a title, a "Prev: June 10-29" note — is discarded.
 
-    The year is not written in this format, so it is carried forward from
-    `base_year` and incremented whenever the month goes backwards. A journal
-    running June to February therefore lands in two calendar years without the
-    author having to annotate anything. Entries must be in chronological order
-    for this to hold, which is how a running journal is written.
+    Handles both shapes seen in real journals: a bare "June 30:" with the year
+    implied, and a fuller "Tuesday Feb. 4 2025 -" with the year written out. An
+    explicit year always wins; otherwise the year carries forward and rolls
+    over when the month drops far enough to look like a real December-January
+    boundary.
+
+    Small backwards steps are treated as typos rather than year boundaries, and
+    both they and genuine rollovers are reported. A real journal contained
+    "June 7:" between "July 6:" and "July 8:", which under a naive rule shifted
+    thirteen entries into the following year — silently, because every date
+    after it was individually plausible.
     """
     matches = list(_INLINE_DATE.finditer(text))
     if len(matches) < 2:
-        return []
+        return [], []
 
     out: list[tuple[str, str]] = []
+    warnings: list[str] = []
     year = base_year
     previous_month = 0
 
     for index, match in enumerate(matches):
         month = _month_lookup(match.group(1))
         day = int(match.group(2))
+        explicit_year = int(match.group(3)) if match.group(3) else None
         if month is None:
             continue
 
-        # Validate before committing the rollover state. An unparseable date
-        # such as "February 31" must not advance the year, or a single typo
-        # shifts every entry after it by twelve months — and silently, since
-        # the dates that follow are all individually plausible.
-        candidate_year = year + 1 if month < previous_month else year
+        if explicit_year is not None:
+            candidate_year = explicit_year
+        elif previous_month and month < previous_month:
+            decrease = previous_month - month
+            if decrease >= _ROLLOVER_MIN_DECREASE:
+                candidate_year = year + 1
+                warnings.append(
+                    f"year rolled to {candidate_year} at "
+                    f"{match.group(0).strip()} (month went back {decrease})"
+                )
+            else:
+                candidate_year = year
+                warnings.append(
+                    f"out of order: {match.group(0).strip()} follows month "
+                    f"{previous_month:02d}. Kept in {year} as a likely typo — "
+                    f"check it."
+                )
+        else:
+            candidate_year = year
+
+        # Validate before committing state. An unparseable "February 31" must
+        # not advance anything, or one typo shifts every later entry.
         try:
             iso = date(candidate_year, month, day).isoformat()
         except ValueError:
+            warnings.append(f"unparseable date skipped: {match.group(0).strip()}")
             continue
         year, previous_month = candidate_year, month
 
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         body = text[match.end():end].strip()
-        if body:
+        if not body:
+            continue
+
+        # Consecutive headers with the same date are two dreams from one night
+        # written under repeated headings rather than as paragraphs. Merging
+        # them keeps both; report_date is unique, so leaving them separate
+        # would silently drop the first.
+        if out and out[-1][0] == iso:
+            out[-1] = (iso, out[-1][1] + "\n\n" + body)
+        else:
             out.append((iso, body))
-    return out
+    return out, warnings
 
 
 def count_dreams(body: str) -> int:
@@ -315,7 +367,10 @@ def scan(path: Path, *, base_year: Optional[int] = None) -> ImportPreview:
         # with headings, and omits the year. Detected first, because the
         # heading-based splitter cannot see those dates at all and would import
         # the entire journal as one undated blob.
-        prose = split_dated_prose(text, base_year) if base_year else []
+        prose, prose_warnings = (
+            split_dated_prose(text, base_year) if base_year else ([], [])
+        )
+        preview.warnings.extend(f"{file.name}: {w}" for w in prose_warnings)
         if prose:
             for iso, body in prose:
                 lucid, evidence = detect_lucid(body)
@@ -405,6 +460,16 @@ def format_preview(preview: ImportPreview, limit: int = 3) -> str:
         add("  which imports them unscored and excludes them from the rate.")
         add("")
 
+    if preview.warnings:
+        add("Warnings — check these before importing")
+        add("-" * 68)
+        for warning in preview.warnings[:20]:
+            for line in _wrap(warning, 66):
+                add(f"  ! {line}")
+        if len(preview.warnings) > 20:
+            add(f"  ... and {len(preview.warnings) - 20} more")
+        add("")
+
     if preview.duplicates:
         add("Duplicate dates (later entries would overwrite earlier ones)")
         add("-" * 68)
@@ -424,3 +489,16 @@ def format_preview(preview: ImportPreview, limit: int = 3) -> str:
     add("before importing. A mis-parse of a journal you cannot regenerate is")
     add("the one failure worth being slow about.")
     return "\n".join(lines)
+
+
+def _wrap(text: str, width: int) -> list[str]:
+    words, lines, current = text.split(), [], ""
+    for word in words:
+        if len(current) + len(word) + 1 > width:
+            lines.append(current)
+            current = word
+        else:
+            current = f"{current} {word}".strip()
+    if current:
+        lines.append(current)
+    return lines
