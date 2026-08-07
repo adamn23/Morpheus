@@ -30,27 +30,46 @@ from morpheus.calibration.protocol import (
 from morpheus.calibration.runner import CalibrationRunner
 
 
-def samples(values, *, face=True, quality=0.9, n_extra_none=0):
+FPS = 30.0
+
+
+def samples(values, *, face=True, quality=0.9, n_extra_none=0, coherence=0.2,
+            lid=None, t0=0.0):
+    """Frame rows as the runner emits them.
+
+    t_mono is required: the positive control aggregates into one-second windows
+    and cuts them on timestamps, so rows without a clock are invisible to it.
+    coherence is required for the V1 validity criterion; without it the profile
+    correctly refuses to return a verdict at all.
+    """
     rows = [
-        {"eye_flow": v, "bilateral": 0.6, "face_present": face,
-         "interocular": 120.0, "quality": quality}
-        for v in values
+        {"t_mono": t0 + i / FPS, "eye_flow": v, "bilateral": 0.6,
+         "coherence": coherence, "lid_disp": (lid[i] if lid else None),
+         "face_present": face, "interocular": 120.0, "quality": quality}
+        for i, v in enumerate(values)
     ]
+    n = len(rows)
     rows += [
-        {"eye_flow": None, "bilateral": None, "face_present": False,
+        {"t_mono": t0 + (n + i) / FPS, "eye_flow": None, "bilateral": None,
+         "coherence": None, "lid_disp": None, "face_present": False,
          "interocular": None, "quality": quality}
-        for _ in range(n_extra_none)
+        for i in range(n_extra_none)
     ]
     return rows
 
 
-def collected(*, separation: float, seed: int = 0, n: int = 120) -> dict:
-    """Baseline and saccade segments differing by `separation` standard deviations."""
+def collected(*, separation: float, seed: int = 0, n: int = 1200,
+              baseline_coherence: float = 0.2) -> dict:
+    """Baseline and saccade segments differing by `separation` standard deviations.
+
+    n defaults to 1200 frames (40 s at 30 fps) so that windowing yields enough
+    one-second windows for the AUC minimum of ten per group.
+    """
     rng = np.random.default_rng(seed)
     baseline = rng.normal(1.0, 0.3, n).clip(0)
     saccades = rng.normal(1.0 + separation * 0.3, 0.3, n).clip(0)
     return {
-        "eyes_closed_still": samples(baseline),
+        "eyes_closed_still": samples(baseline, coherence=baseline_coherence),
         "slow_saccades": samples(saccades[: n // 2]),
         "fast_saccades": samples(saccades[n // 2:]),
     }
@@ -118,14 +137,18 @@ def test_strong_signal_passes_the_gate() -> None:
 
 def test_absent_signal_fails_the_gate() -> None:
     """The direction that matters. A dead detector must not pass."""
-    profile = build_profile(collected(separation=0.0))
-    assert profile.positive_control_auc == pytest.approx(0.5, abs=0.12)
+    data = collected(separation=0.0)
+    data["head_turn"] = samples(np.full(600, 1.0))  # no leakage, so V2 passes
+    profile = build_profile(data)
+    assert profile.positive_control_auc == pytest.approx(0.5, abs=0.15)
     assert profile.verdict == "FAIL"
     assert not profile.passed
 
 
 def test_marginal_signal_fails_rather_than_squeaking_through() -> None:
-    profile = build_profile(collected(separation=0.6))
+    data = collected(separation=0.35)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    profile = build_profile(data)
     assert profile.verdict == "FAIL"
 
 
@@ -186,7 +209,9 @@ def test_thin_segments_are_flagged() -> None:
 
 def test_failure_text_forbids_tuning_and_retrying() -> None:
     """The report must say the quiet part, because the temptation is real."""
-    text = format_profile(build_profile(collected(separation=0.0)))
+    data = collected(separation=0.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    text = format_profile(build_profile(data))
     assert "FAIL" in text
     assert "Do not tune thresholds" in text
 
@@ -286,3 +311,194 @@ def test_unknown_stage_is_rejected() -> None:
 
     with pytest.raises(KeyError):
         segments_for("nonsense")
+
+
+# ------------------------------- window aggregation: the duty-cycle defect
+
+
+def timed(values, *, fps=30.0, t0=0.0, field="eye_flow"):
+    return [{"t_mono": t0 + i / fps, field: v} for i, v in enumerate(values)]
+
+
+def _burst_segment(n_windows, duty, separation, *, fps=30, seed=0, field="eye_flow"):
+    """A segment where the event occupies `duty` of each one-second window."""
+    rng = np.random.default_rng(seed)
+    w = int(fps)
+    out = []
+    for _ in range(n_windows):
+        window = rng.normal(1.0, 0.3, w)
+        k = max(1, int(w * duty))
+        window[rng.choice(w, k, replace=False)] = rng.normal(1.0 + separation * 0.3, 0.3, k)
+        out.extend(window)
+    return timed(out, fps=fps, field=field)
+
+
+def test_frame_level_auc_cannot_reach_the_gate() -> None:
+    """The defect that invalidated both real calibration runs.
+
+    A saccade lasts 1-2 frames at 30 fps, so "one per second" puts the event in
+    ~5% of frames. Labelling every frame of the segment positive collapses AUC
+    toward chance no matter how good the detector is. Pinned so the frame-level
+    comparison can never quietly come back.
+    """
+    from morpheus.calibration.profile import _auc
+
+    rng = np.random.default_rng(0)
+    n = 20000
+    baseline = rng.normal(1.0, 0.3, n)
+    perfect = rng.normal(1.0, 0.3, n)
+    perfect[: int(n * 0.05)] = 50.0  # a flawless detector, 5% duty
+
+    ceiling = _auc(perfect, baseline)
+    assert ceiling < 0.60, f"expected a collapsed ceiling, got {ceiling:.3f}"
+    assert ceiling < POSITIVE_CONTROL_AUC_PASS, (
+        "frame-level AUC cannot reach the 0.80 gate even for a perfect detector"
+    )
+
+
+def test_window_maxima_recovers_the_signal() -> None:
+    """Same data, same signal — only the aggregation changes."""
+    from morpheus.calibration.profile import _auc, window_maxima
+
+    pos = _burst_segment(40, duty=0.05, separation=4.0, seed=1)
+    neg = timed(np.random.default_rng(2).normal(1.0, 0.3, 40 * 30))
+
+    frame_auc = _auc(
+        [s["eye_flow"] for s in pos], [s["eye_flow"] for s in neg]
+    )
+    window_auc = _auc(window_maxima(pos, "eye_flow"), window_maxima(neg, "eye_flow"))
+
+    assert frame_auc < 0.60
+    assert window_auc > 0.90
+    assert window_auc > frame_auc + 0.3
+
+
+def test_window_maxima_uses_timestamps_not_counts() -> None:
+    """A dropped frame must shorten one window, not shift every later one."""
+    from morpheus.calibration.profile import window_maxima
+
+    rows = timed([1.0] * 30) + timed([2.0] * 30, t0=1.0)
+    del rows[10:20]  # drop a third of the first second
+    peaks = window_maxima(rows, "eye_flow")
+    assert peaks == [1.0, 2.0]
+
+
+def test_window_maxima_ignores_missing_values() -> None:
+    from morpheus.calibration.profile import window_maxima
+
+    rows = timed([1.0, None, 3.0, None] * 8)   # 32 rows at 30fps -> 2 windows
+    assert window_maxima(rows, "eye_flow") == [3.0, 3.0]
+
+
+def test_window_maxima_empty_input() -> None:
+    from morpheus.calibration.profile import window_maxima
+
+    assert window_maxima([], "eye_flow") == []
+    assert window_maxima(timed([None] * 30), "eye_flow") == []
+
+
+# --------------------------- validity gating and the second measurement
+
+
+def test_no_verdict_when_coherence_is_unmeasurable() -> None:
+    """Exactly the state both real runs were in, now reported honestly.
+
+    V1 could not be evaluated because coherence never reached the profile. A
+    gate reading taken through an unverified instrument is not a result, so the
+    verdict must withhold rather than print FAIL.
+    """
+    data = collected(separation=4.0)
+    for rows in data.values():
+        for row in rows:
+            row["coherence"] = None
+    profile = build_profile(data)
+    assert profile.v1_noise_floor_ok is None
+    assert profile.verdict.startswith("NO VERDICT")
+    assert not profile.passed
+
+
+def test_no_verdict_when_baseline_is_not_noise() -> None:
+    """High baseline coherence means real movement is polluting the floor."""
+    profile = build_profile(collected(separation=4.0, baseline_coherence=0.85))
+    assert profile.v1_noise_floor_ok is False
+    assert profile.verdict == "NO VERDICT (instrument invalid)"
+
+
+def test_no_verdict_when_head_motion_dominates() -> None:
+    """V2: the exact shape of both real failures."""
+    data = collected(separation=1.0)
+    data["head_turn"] = samples(np.full(600, 40.0))  # head turns swamp everything
+    profile = build_profile(data)
+    assert profile.v2_registration_ok is False
+    assert profile.verdict == "NO VERDICT (instrument invalid)"
+
+
+def test_a_valid_instrument_with_signal_passes() -> None:
+    data = collected(separation=5.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    profile = build_profile(data)
+    assert profile.v1_noise_floor_ok is True
+    assert profile.v2_registration_ok is True
+    assert profile.verdict == "PASS"
+
+
+def test_lid_geometry_is_analysed_as_a_second_measurement() -> None:
+    """Collected since M1, discarded on both real runs."""
+    rng = np.random.default_rng(0)
+    flat = np.full(1200, 1.0)
+    data = {
+        "eyes_closed_still": samples(flat, lid=list(rng.normal(1.0, 0.2, 1200))),
+        "slow_saccades": samples(flat[:600], lid=list(rng.normal(4.0, 0.2, 600))),
+        "fast_saccades": samples(flat[600:], lid=list(rng.normal(4.0, 0.2, 600))),
+    }
+    profile = build_profile(data)
+    assert profile.lid_auc is not None and profile.lid_auc > 0.9
+    assert "windows" in profile.lid_detail
+
+
+def test_lid_geometry_absent_is_reported_not_faked() -> None:
+    profile = build_profile(collected(separation=3.0))  # lid=None throughout
+    assert profile.lid_auc is None
+    assert "no dense landmarks" in profile.lid_detail
+
+
+def test_report_shows_validity_before_the_verdict() -> None:
+    data = collected(separation=4.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    text = format_profile(build_profile(data))
+    assert text.index("INSTRUMENT VALIDITY") < text.index("POSITIVE CONTROL")
+    assert "window maxima, not per-frame" in text
+
+
+# ------------------------------------------------------------ persistence
+
+
+def test_raw_samples_persist_and_reload(conn) -> None:
+    """Both earlier failures needed a fresh session to diagnose because only
+    summary statistics survived. A re-analysis must be possible from the DB."""
+    from morpheus.calibration.profile import load_samples
+
+    data = collected(separation=4.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    profile = build_profile(data)
+    profile_id = save_profile(conn, profile, collected=data)
+
+    reloaded = load_samples(conn, profile_id)
+    assert set(reloaded) == set(data)
+    assert len(reloaded["eyes_closed_still"]) == len(data["eyes_closed_still"])
+    assert reloaded["eyes_closed_still"][0]["coherence"] is not None
+
+    # The whole point: re-analysis without re-recording.
+    again = build_profile(reloaded)
+    assert again.positive_control_auc == pytest.approx(profile.positive_control_auc, abs=1e-9)
+
+
+def test_profile_persists_the_new_columns(conn) -> None:
+    data = collected(separation=4.0)
+    data["head_turn"] = samples(np.full(600, 1.0))
+    profile = build_profile(data)
+    save_profile(conn, profile, collected=data)
+    row = latest(conn)
+    assert row["baseline_coherence"] == pytest.approx(0.2)
+    assert row["windows_positive"] > 10
+    assert row["verdict"] == "PASS"
