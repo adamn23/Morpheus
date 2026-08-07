@@ -110,9 +110,20 @@ def _to_row(sample) -> dict:
         values = [v for v in (eye.flow_left, eye.flow_right) if v is not None]
         flow = sum(values) / len(values) if values else None
 
+    # Coherence: |mean(v)| / mean(|v|). Near 1 for real movement, near 0 for
+    # sensor noise. This is the V1 validity criterion and it was collected but
+    # never surfaced on the first two runs, which left V1 unmeasurable.
+    coherence = None
+    if eye is not None:
+        vals = [
+            v for v in (eye.coherence_left, eye.coherence_right) if v is not None
+        ]
+        coherence = sum(vals) / len(vals) if vals else None
+
     return {
         "t_mono": sample.t_mono,
         "eye_flow": flow,
+        "coherence": coherence,
         "bilateral": getattr(eye, "bilateral_corr", None) if eye else None,
         "lid_disp": (
             getattr(eye, "lid_disp_left", None) or getattr(eye, "lid_disp_right", None)
