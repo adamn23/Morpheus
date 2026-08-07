@@ -248,3 +248,7 @@ data gets.
  narratives (from M2) must never be routed through an external service.
 - Run on an encrypted volume. FileVault is a documented prerequisite.
 - The database and any recorded media are gitignored.
+
+## License
+All rights reserved. This repository and its contents are proprietary and confidential. 
+Unauthorized copying, modification, or distribution is strictly prohibited.
