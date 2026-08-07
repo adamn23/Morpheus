@@ -43,6 +43,7 @@ def register(app: typer.Typer) -> None:
     app.command("import-journal")(import_journal)
     app.command("dream-signs")(dream_signs)
     app.command("calibrate")(calibrate)
+    app.command("confirm")(confirm_cmd)
 
 
 def _registry(config: MorpheusConfig, conn) -> CueAssetRegistry:
@@ -894,3 +895,38 @@ def _calibrate_audio(conn, config: MorpheusConfig) -> None:
     typer.echo("  Cueing starts near the faintest level and adapts upward only on")
     typer.echo("  quiet outcomes. Waking you is the failure mode that matters, so")
     typer.echo("  the starting point is deliberately close to inaudible.")
+
+
+# -------------------------------------------------------------------- confirm
+
+
+def confirm_cmd(
+    profile_id: Optional[int] = typer.Option(
+        None, "--profile", help="Calibration profile id; defaults to the most recent."
+    ),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Evaluate a calibration against the FROZEN lid-geometry criteria.
+
+    The criteria live in calibration/confirmation.py and were committed before
+    the confirmation data existed. This command only reads them; there is no
+    flag to adjust anything, which is the point.
+    """
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    from .calibration.confirmation import format_result, load_and_confirm
+
+    config = MorpheusConfig.load(config_path)
+    if not config.storage.db_path.exists():
+        typer.secho("no database yet", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    conn = connect(config.storage.db_path, read_only=True)
+    try:
+        result = load_and_confirm(conn, profile_id)
+    except ValueError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(1)
+    finally:
+        conn.close()
+
+    typer.echo(format_result(result))
