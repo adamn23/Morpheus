@@ -706,15 +706,33 @@ def calibrate(
 
     if show:
         row = latest(conn)
-        conn.close()
         if row is None:
+            conn.close()
             typer.echo("no calibration profile recorded yet")
             raise typer.Exit(0)
+
+        def _fmt(value, spec=".3f"):
+            return format(value, spec) if value is not None else "-"
+
+        n_samples = conn.execute(
+            "SELECT COUNT(*) FROM calibration_samples WHERE profile_id = ?", (row["id"],)
+        ).fetchone()[0]
+        conn.close()
         typer.echo(f"created            {row['created_at']}")
-        typer.echo(f"positive control   {row['positive_control_auc']}")
-        typer.echo(f"head-turn leakage  {row['head_turn_leakage']}")
-        typer.echo(f"suggested thresh   {row['suggested_threshold']}")
-        typer.echo(f"passed             {bool(row['passed'])}")
+        typer.echo(f"verdict            {row['verdict'] or '(predates verdict recording)'}")
+        typer.echo(f"eye-flow AUC       {_fmt(row['positive_control_auc'])}")
+        typer.echo(f"lid-contour AUC    {_fmt(row['lid_auc'])}")
+        typer.echo(f"head-turn AUC      {_fmt(row['head_turn_leakage'])}")
+        typer.echo(f"baseline coherence {_fmt(row['baseline_coherence'])}   (V1: < 0.35)")
+        typer.echo(f"windows            {row['windows_positive'] or '-'} positive / "
+                   f"{row['windows_baseline'] or '-'} baseline")
+        typer.echo(f"raw samples kept   {n_samples:,}")
+        if not n_samples:
+            typer.secho(
+                "  This profile has no raw samples, so it cannot be re-analysed\n"
+                "  without recording again. Runs from before Phase A are like this.",
+                fg=typer.colors.YELLOW,
+            )
         raise typer.Exit(0)
 
     if audio:
@@ -794,7 +812,7 @@ def calibrate(
     typer.echo("")
     typer.echo(format_profile(profile))
 
-    save_profile(conn, profile)
+    save_profile(conn, profile, collected=collected)
     conn.close()
     typer.secho("\nprofile saved", fg=typer.colors.GREEN)
 

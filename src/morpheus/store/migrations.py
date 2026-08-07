@@ -362,6 +362,39 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
         """,
     ),
+    (
+        5,
+        """
+        -- Raw per-frame calibration samples.
+        --
+        -- Previously only summary statistics were kept, so diagnosing a failed
+        -- calibration required running a whole new session — which happened
+        -- twice, and the second time the data needed to check a validity
+        -- criterion had already been discarded. A three-minute session produces
+        -- a few thousand rows; keeping them is free.
+        CREATE TABLE calibration_samples (
+            profile_id  INTEGER NOT NULL REFERENCES calibration_profiles(id),
+            segment_key TEXT    NOT NULL,
+            t_mono      REAL    NOT NULL,
+            eye_flow    REAL,
+            coherence   REAL,
+            bilateral   REAL,
+            lid_disp    REAL,
+            interocular REAL,
+            quality     REAL,
+            motion      REAL,
+            face_present INTEGER,
+            coverage    TEXT,
+            PRIMARY KEY (profile_id, segment_key, t_mono)
+        ) WITHOUT ROWID;
+
+        ALTER TABLE calibration_profiles ADD COLUMN baseline_coherence REAL;
+        ALTER TABLE calibration_profiles ADD COLUMN lid_auc REAL;
+        ALTER TABLE calibration_profiles ADD COLUMN windows_positive INTEGER;
+        ALTER TABLE calibration_profiles ADD COLUMN windows_baseline INTEGER;
+        ALTER TABLE calibration_profiles ADD COLUMN verdict TEXT;
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)
