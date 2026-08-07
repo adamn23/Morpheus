@@ -15,7 +15,7 @@ pre-registration, an adaptive bandit, calibration, M1 eye tracking, and
 reference validation are all built.
 
 > [!IMPORTANT]
-> the user may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
+> The user may not own; M6 (sensor-timed cueing) is hard-locked behind M4 passing and
 > raises at construction without it. That lock has no override see
 > `cue/sensor_timing.py` for why.
 
