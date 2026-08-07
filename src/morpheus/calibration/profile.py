@@ -68,6 +68,33 @@ class SegmentStats:
 
 
 @dataclass
+class ChannelVerdict:
+    """Validity and outcome for ONE measurement channel.
+
+    Previously a single set of validity criteria gated the whole profile, so a
+    dead optical-flow measure could veto a working lid-contour measure and vice
+    versa. That is wrong: coherence is a property of the flow field and says
+    nothing about mesh geometry, while pose sensitivity affects the two channels
+    differently. Each channel now carries its own validity.
+    """
+
+    channel: str
+    auc: Optional[float] = None
+    validity_ok: Optional[bool] = None
+    validity_detail: str = ""
+
+    @property
+    def verdict(self) -> str:
+        if self.auc is None:
+            return "INSUFFICIENT DATA"
+        if self.validity_ok is False:
+            return "NO VERDICT (instrument invalid)"
+        if self.validity_ok is None:
+            return "NO VERDICT (validity unmeasurable)"
+        return "PASS" if self.auc >= POSITIVE_CONTROL_AUC_PASS else "FAIL"
+
+
+@dataclass
 class CalibrationProfile:
     created_at: str
     segments: dict[str, SegmentStats] = field(default_factory=dict)
@@ -81,15 +108,58 @@ class CalibrationProfile:
     # V1 validity criterion; unmeasurable on the first two runs.
     baseline_coherence: Optional[float] = None
     head_turn_leakage: Optional[float] = None
+    # The lid channel's own pose confound, which was never computed before
+    # and which turned out to be larger than its saccade signal.
+    lid_head_turn_auc: Optional[float] = None
     posture_visibility: dict[str, float] = field(default_factory=dict)
     baseline_median: Optional[float] = None
     baseline_mad: Optional[float] = None
     suggested_threshold: Optional[float] = None
     notes: list[str] = field(default_factory=list)
 
+    # Which channel the top-level `verdict` reports on. The general waking
+    # calibration is specified around eye_flow; the lid-geometry confirmation
+    # (calibration/confirmation.py) declares its own primary in advance.
+    primary_channel: str = "eye_flow"
+
+    def channel_verdict(self, channel: str) -> ChannelVerdict:
+        """Validity and outcome for one channel, evaluated independently."""
+        if channel == "eye_flow":
+            return ChannelVerdict(
+                channel="eye_flow",
+                auc=self.positive_control_auc,
+                validity_ok=_combine(self.v1_noise_floor_ok, self.v2_registration_ok),
+                validity_detail=(
+                    f"V1 coherence {_opt(self.baseline_coherence)} "
+                    f"(< {BASELINE_COHERENCE_MAX}); "
+                    f"V2 head-turn {_opt(self.head_turn_leakage)} "
+                    f"< saccade {_opt(self.positive_control_auc)}"
+                ),
+            )
+        if channel == "lid_disp":
+            # Coherence is a property of the optical flow field and does not
+            # apply here. The lid channel's own confound is pose: the mesh
+            # geometry of the eye region changes as the head rotates, quite
+            # apart from anything the eye does.
+            ok = (
+                None
+                if (self.lid_head_turn_auc is None or self.lid_auc is None)
+                else self.lid_head_turn_auc < self.lid_auc
+            )
+            return ChannelVerdict(
+                channel="lid_disp",
+                auc=self.lid_auc,
+                validity_ok=ok,
+                validity_detail=(
+                    f"head-turn {_opt(self.lid_head_turn_auc)} "
+                    f"< saccade {_opt(self.lid_auc)}"
+                ),
+            )
+        raise KeyError(f"unknown channel {channel!r}")
+
     @property
     def v1_noise_floor_ok(self) -> Optional[bool]:
-        """Is the baseline genuinely noise rather than coherent movement?"""
+        """Is the baseline genuinely noise? Applies to the FLOW channel only."""
         if self.baseline_coherence is None:
             return None
         return self.baseline_coherence < BASELINE_COHERENCE_MAX
@@ -103,20 +173,14 @@ class CalibrationProfile:
 
     @property
     def verdict(self) -> str:
-        """PASS/FAIL only when the instrument is known to be working.
+        """Verdict for the declared primary channel.
 
         A gate reading taken through a broken instrument is not a result, so
-        the validity criteria are evaluated first and their failure produces NO
-        VERDICT rather than a FAIL. Both earlier runs would have returned NO
-        VERDICT under this rule.
+        validity is evaluated first and its failure produces NO VERDICT rather
+        than FAIL. Other channels are reported alongside but do not influence
+        this: picking whichever channel happened to score best would be fishing.
         """
-        if self.positive_control_auc is None:
-            return "INSUFFICIENT DATA"
-        if self.v1_noise_floor_ok is False or self.v2_registration_ok is False:
-            return "NO VERDICT (instrument invalid)"
-        if self.v1_noise_floor_ok is None:
-            return "NO VERDICT (validity unmeasurable)"
-        return "PASS" if self.positive_control_auc >= POSITIVE_CONTROL_AUC_PASS else "FAIL"
+        return self.channel_verdict(self.primary_channel).verdict
 
     @property
     def passed(self) -> bool:
@@ -298,6 +362,9 @@ def build_profile(collected: dict[str, list[dict]]) -> CalibrationProfile:
         f"{len(lid_positive)} vs {len(lid_baseline)} windows"
         if lid_positive and lid_baseline
         else "no dense landmarks available"
+    )
+    profile.lid_head_turn_auc = _auc(
+        window_maxima(collected.get("head_turn", []), "lid_disp"), lid_baseline
     )
 
     # Head-turn leakage: how much a pure head movement looks like eye movement.
@@ -486,6 +553,24 @@ def format_profile(profile: CalibrationProfile) -> str:
         add("  Do not tune thresholds and re-run until this passes. The threshold is")
         add("  pre-committed precisely so that it cannot be moved after seeing it.")
     return "\n".join(lines)
+
+
+def _combine(*checks: Optional[bool]) -> Optional[bool]:
+    """Combine validity checks, with a definitive failure taking precedence.
+
+    A check that is known to have failed invalidates the instrument whether or
+    not the others could be evaluated. Returning "unmeasurable" there would
+    hide a failure behind a missing measurement.
+    """
+    if any(c is False for c in checks):
+        return False
+    if any(c is None for c in checks):
+        return None
+    return True
+
+
+def _opt(value: Optional[float], spec: str = ".3f") -> str:
+    return format(value, spec) if value is not None else "-"
 
 
 def _mark(ok: Optional[bool]) -> str:
