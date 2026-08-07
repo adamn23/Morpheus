@@ -80,7 +80,7 @@ PROTOCOL: tuple[Segment, ...] = (
             "to move your eyes behind the lids — this is the noise floor everything "
             "else is measured against, so it is the most important segment here."
         ),
-        seconds=30,
+        seconds=45,
     ),
     Segment(
         key="slow_saccades",
@@ -92,7 +92,7 @@ PROTOCOL: tuple[Segment, ...] = (
             "slowly left, then right, about once per second. Make them large, "
             "deliberate movements — as far as is comfortable in each direction."
         ),
-        seconds=30,
+        seconds=45,
         contrast_with=("eyes_closed_still",),
     ),
     Segment(
@@ -105,7 +105,7 @@ PROTOCOL: tuple[Segment, ...] = (
             "This is the closest available proxy for the bursts this system is "
             "eventually looking for."
         ),
-        seconds=30,
+        seconds=45,
         contrast_with=("eyes_closed_still",),
     ),
     Segment(
@@ -145,6 +145,21 @@ PROTOCOL: tuple[Segment, ...] = (
             "itself."
         ),
         seconds=25,
+        contrast_with=("eyes_closed_still", "slow_saccades"),
+    ),
+    Segment(
+        key="micro_head_motion",
+        role=SegmentRole.CONFOUND,
+        setup=SegmentSetup.DESK,
+        title="Small head movements, eyes still",
+        instruction=(
+            "Eyes closed and deliberately still behind the lids — do not move them "
+            "at all. Make small, slow head movements of the kind you would make "
+            "settling on a pillow: shift a centimetre, tilt slightly, settle again. "
+            "Nothing large. This is the confound that matters, because big head "
+            "turns are removed by the motion gate but small ones are not."
+        ),
+        seconds=45,
         contrast_with=("eyes_closed_still", "slow_saccades"),
     ),
     Segment(
