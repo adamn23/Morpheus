@@ -14,6 +14,7 @@ import pytest
 
 from morpheus.analysis.dream_signs import extract
 from morpheus.report.importer import detect_lucid, parse_text, scan
+from morpheus.report.schema import MorningReport, ReportStore
 
 
 def write(root: Path, name: str, text: str) -> Path:
@@ -198,3 +199,81 @@ def test_ranking_is_by_nights_not_raw_mentions() -> None:
 def test_no_narratives_returns_empty() -> None:
     assert extract([], min_nights=2) == []
     assert extract(["", "   "], min_nights=1) == []
+
+
+# --------------------------------- scoring prose entries that carry no tag
+
+
+def test_suggestive_phrases_are_detected() -> None:
+    """A journal kept in prose has no tags, so wording is the only handle."""
+    from morpheus.report.review import SUGGESTIVE
+
+    def hints(text):
+        return [label for pattern, label in SUGGESTIVE if pattern.search(text)]
+
+    assert hints("Suddenly I realised I was dreaming.")
+    assert hints("I knew I was dreaming and stayed calm.")
+    assert hints("did a reality check, nose pinch worked")
+    assert hints("became fully lucid in the corridor")
+    assert hints("a false awakening, then I woke properly")
+    assert not hints("A long dream about a train station.")
+
+
+def test_unscored_returns_only_unscored_entries(conn) -> None:
+    from morpheus.report.review import unscored
+
+    store = ReportStore(conn)
+    store.submit(MorningReport(report_date="2026-06-01", narrative="A plain dream."))
+    store.submit(MorningReport(report_date="2026-06-02", narrative="I realised I was dreaming.",
+                               lucid_binary=True, dreams_recalled=1))
+    store.submit(MorningReport(report_date="2026-06-03", narrative="Another plain one."))
+
+    dates = [c.report_date for c in unscored(conn)]
+    assert "2026-06-02" not in dates
+    assert set(dates) == {"2026-06-01", "2026-06-03"}
+
+
+def test_suggestive_entries_are_ordered_first(conn) -> None:
+    """Ordering is a convenience. Every entry still has to be answered."""
+    from morpheus.report.review import unscored
+
+    store = ReportStore(conn)
+    store.submit(MorningReport(report_date="2026-06-01", narrative="A plain dream."))
+    store.submit(MorningReport(report_date="2026-06-02", narrative="Then I knew I was dreaming."))
+
+    candidates = unscored(conn)
+    assert candidates[0].report_date == "2026-06-02"
+    assert candidates[0].suggestive
+    assert not candidates[1].suggestive
+
+
+def test_scoring_is_never_automatic(conn) -> None:
+    """The matcher must not write anything. Only an explicit call scores.
+
+    Classifying prose automatically would fabricate the project's primary
+    outcome, which is the one number everything else exists to move.
+    """
+    from morpheus.report.review import score, unscored
+
+    store = ReportStore(conn)
+    store.submit(MorningReport(report_date="2026-06-01",
+                               narrative="I realised I was dreaming and it held."))
+    assert unscored(conn)[0].suggestive
+    assert conn.execute("SELECT lucid_binary FROM reports").fetchone()[0] is None
+
+    score(conn, "2026-06-01", True)
+    assert conn.execute("SELECT lucid_binary FROM reports").fetchone()[0] == 1
+    assert unscored(conn) == []
+
+
+def test_progress_counts(conn) -> None:
+    from morpheus.report.review import progress, score
+
+    store = ReportStore(conn)
+    for day in range(1, 6):
+        store.submit(MorningReport(report_date=f"2026-06-0{day}", narrative=f"dream {day}"))
+    score(conn, "2026-06-01", True)
+    score(conn, "2026-06-02", False)
+
+    stats = progress(conn)
+    assert stats == {"total": 5, "scored": 2, "remaining": 3, "lucid": 1}

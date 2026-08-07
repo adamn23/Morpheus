@@ -44,6 +44,7 @@ def register(app: typer.Typer) -> None:
     app.command("dream-signs")(dream_signs)
     app.command("calibrate")(calibrate)
     app.command("confirm")(confirm_cmd)
+    app.command("review")(review_cmd)
 
 
 def _registry(config: MorpheusConfig, conn) -> CueAssetRegistry:
@@ -930,3 +931,91 @@ def confirm_cmd(
         conn.close()
 
     typer.echo(format_result(result))
+
+
+# --------------------------------------------------------------------- review
+
+
+def review_cmd(
+    limit: Optional[int] = typer.Option(None, help="Stop after this many entries."),
+    suggestive_only: bool = typer.Option(
+        False, help="Only entries whose wording hints at lucidity."
+    ),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Score imported journal entries that carry no lucidity tag.
+
+    A journal kept in prose imports unscored, which leaves the baseline rate
+    unmeasurable. This walks those entries so you can code them against the
+    pinned outcome definition.
+
+    The phrase matching only sorts and highlights; it never decides. Prose is
+    ambiguous and only you know what happened, so classifying automatically
+    would be fabricating the project's primary outcome.
+    """
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    from .report.review import progress, score, unscored
+
+    config = MorpheusConfig.load(config_path)
+    if not config.storage.db_path.exists():
+        typer.secho("no database yet — import your journal first", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    conn = open_db(config.storage.db_path)
+    candidates = unscored(conn, limit=limit)
+    if suggestive_only:
+        candidates = [c for c in candidates if c.suggestive]
+
+    if not candidates:
+        stats = progress(conn)
+        conn.close()
+        typer.secho("nothing left to score", fg=typer.colors.GREEN)
+        typer.echo(f"  {stats['scored']}/{stats['total']} entries scored, "
+                   f"{stats['lucid']} lucid")
+        return
+
+    typer.echo(f"\n{len(candidates)} entries to score")
+    typer.echo("=" * 68)
+    typer.secho(f'Question for each: "{PRIMARY_OUTCOME_DEFINITION}"', bold=True)
+    typer.echo("")
+    typer.echo("  y = yes   n = no   s = skip   q = stop and save")
+    typer.echo("")
+    typer.echo("  These are pre-intervention nights, so over-calling lucidity raises")
+    typer.echo("  your baseline and makes any later effect look smaller. If you are")
+    typer.echo("  genuinely unsure, erring generous is the safe direction.")
+
+    done = 0
+    for index, candidate in enumerate(candidates, start=1):
+        typer.echo("")
+        typer.echo("-" * 68)
+        header = f"[{index}/{len(candidates)}]  {candidate.report_date}"
+        if candidate.hints:
+            header += f"   hints: {', '.join(candidate.hints)}"
+        typer.secho(header, fg=typer.colors.CYAN, bold=True)
+        typer.echo("")
+        for line in candidate.narrative.strip().splitlines():
+            for wrapped in _wrap(line, 66) or [""]:
+                typer.echo(f"    {wrapped}")
+        typer.echo("")
+
+        answer = ""
+        while answer not in ("y", "n", "s", "q"):
+            answer = typer.prompt("  aware you were dreaming? [y/n/s/q]").strip().lower()[:1]
+
+        if answer == "q":
+            break
+        if answer == "s":
+            continue
+        score(conn, candidate.report_date, answer == "y")
+        done += 1
+
+    stats = progress(conn)
+    conn.close()
+    typer.echo("")
+    typer.secho(f"scored {done} this session", fg=typer.colors.GREEN)
+    typer.echo(f"  {stats['scored']}/{stats['total']} total, {stats['lucid']} lucid, "
+               f"{stats['remaining']} remaining")
+    if stats["remaining"]:
+        typer.echo("  run `morpheus review` again to continue")
+    else:
+        typer.echo("  run `morpheus baseline` to see your pre-intervention rate")
