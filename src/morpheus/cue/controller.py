@@ -132,6 +132,12 @@ class CueController:
         return self._state
 
     @property
+    def limits(self):
+        """The supervisor's hard limits. Exposed so a WBTB re-arm can restart
+        the minimum-delay clock; every other cap is the supervisor's alone."""
+        return self._supervisor.limits
+
+    @property
     def cue_count(self) -> int:
         return self._cue_count
 
@@ -139,10 +145,21 @@ class CueController:
     def last_outcome(self) -> Optional[str]:
         return self._last_outcome
 
-    def arm(self, sleep_onset_mono: float, expected_wake_mono: Optional[float] = None) -> None:
-        self._supervisor.arm(sleep_onset_mono, expected_wake_mono)
+    def arm(
+        self,
+        sleep_onset_mono: float,
+        expected_wake_mono: Optional[float] = None,
+        *,
+        new_night: bool = True,
+    ) -> None:
+        """Arm for cueing. `new_night=False` re-arms mid-night after a WBTB wake,
+        preserving the nightly cue budget and any terminal safety stop."""
+        self._supervisor.arm(sleep_onset_mono, expected_wake_mono, new_night=new_night)
         self._state = CueState.SETTLING
-        self._emit("armed", sleep_onset_mono, {"expected_wake_mono": expected_wake_mono})
+        self._emit(
+            "armed", sleep_onset_mono,
+            {"expected_wake_mono": expected_wake_mono, "new_night": new_night},
+        )
 
     def halt(self, reason: str, t_mono: float) -> None:
         self._supervisor.halt(reason)

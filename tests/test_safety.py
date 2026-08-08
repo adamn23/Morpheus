@@ -278,3 +278,70 @@ def test_nightly_cap_never_exceeded_for_any_limits(max_night, max_hour, cooldown
             sup.record_cue(t)
             played += 1
     assert played <= max_night
+
+
+# --------------------------------------------------------------- WBTB re-arm
+
+
+class TestNightBudgetSurvivesRearm:
+    """A WBTB wake re-arms the supervisor mid-night.
+
+    Before `begin_night` was separated from `arm`, re-arming cleared
+    `_cue_times` — which backs both the nightly cap and the rolling-hour cap —
+    so a six-cue budget could deliver twelve, and a night halted on a possible
+    awakening could be silently revived. The whole-night budget and the terminal
+    stops must outlive the re-arm; only the delay clock and cooldown restart.
+    """
+
+    def _sup(self):
+        sup = SafetySupervisor(SafetyLimits())
+        sup.arm(sleep_onset_mono=0.0, expected_wake_mono=10 * HOUR)
+        return sup
+
+    def _burn(self, sup, start, n, limits=None):
+        """Play up to n cues, spacing past cooldown and the hourly cap."""
+        lim = limits or sup.limits
+        played, t = 0, start
+        while played < n and t < start + 12 * HOUR:
+            if sup.authorize(t, 0.08).allowed:
+                sup.record_cue(t)
+                played += 1
+            t += 60.0
+        return played
+
+    def test_nightly_cap_holds_across_rearm(self):
+        sup = self._sup()
+        assert self._burn(sup, 6 * HOUR, 3) == 3
+
+        # WBTB: back to sleep at 7 h, delay clock restarts from there.
+        sup.limits.min_delay_s = 25 * 60
+        sup.arm(sleep_onset_mono=7 * HOUR, expected_wake_mono=10 * HOUR, new_night=False)
+
+        assert self._burn(sup, 7 * HOUR, 5) == 3, "budget restarted after re-arm"
+        assert sup.cues_tonight == 6
+
+    def test_rearm_does_restart_the_delay_clock(self):
+        # The point of re-arming: cues resume shortly after you are back asleep,
+        # not 6 h later. Without this the whole feature is pointless.
+        sup = self._sup()
+        sup.limits.min_delay_s = 25 * 60
+        sup.arm(sleep_onset_mono=7 * HOUR, expected_wake_mono=10 * HOUR, new_night=False)
+        assert sup.authorize(7 * HOUR + 10 * 60, 0.08).denied
+        assert sup.authorize(7 * HOUR + 30 * 60, 0.08).allowed
+
+    def test_rearm_cannot_revive_a_halted_night(self):
+        sup = self._sup()
+        sup.record_awakening(6 * HOUR)
+        sup.limits.min_delay_s = 25 * 60
+        sup.arm(sleep_onset_mono=7 * HOUR, expected_wake_mono=10 * HOUR, new_night=False)
+        assert sup.authorize(8 * HOUR, 0.08).denied
+
+    def test_begin_night_does_clear_everything(self):
+        sup = self._sup()
+        self._burn(sup, 6 * HOUR, 2)
+        sup.record_awakening(7 * HOUR)
+        sup.begin_night()
+        sup.arm(sleep_onset_mono=0.0, expected_wake_mono=10 * HOUR, new_night=False)
+        assert sup.cues_tonight == 0
+        assert not sup.halted
+        assert sup.authorize(6 * HOUR, 0.08).allowed

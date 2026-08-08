@@ -118,15 +118,44 @@ class SafetySupervisor:
 
     # ------------------------------------------------------------- lifecycle
 
-    def arm(self, sleep_onset_mono: float, expected_wake_mono: Optional[float] = None) -> None:
-        self._armed = True
+    def begin_night(self) -> None:
+        """Start a new night. Clears everything that is budgeted per night.
+
+        Separated from `arm` because a night can legitimately be armed more than
+        once — a WBTB wake re-arms with a new sleep onset — and the whole-night
+        safety budget must not restart when it does.
+        """
+        self._cue_times.clear()
         self._halted = False
         self._halt_reason = ""
+        self._awakening_seen = False
+        self._violations.clear()
+
+    def arm(
+        self,
+        sleep_onset_mono: float,
+        expected_wake_mono: Optional[float] = None,
+        *,
+        new_night: bool = True,
+    ) -> None:
+        """Arm for cueing from a given sleep onset.
+
+        `new_night=False` re-arms within the night, which is what a WBTB wake
+        needs: the minimum-delay clock restarts from the moment you go back to
+        sleep, but the nightly cue cap, the rolling-hour cap, and the terminal
+        safety stops all carry over. Resetting those on re-arm would let a
+        six-cue budget deliver twelve, and would let a re-arm silently revive a
+        night that had halted on a possible awakening.
+        """
+        if new_night:
+            self.begin_night()
+        self._armed = True
         self._sleep_onset_mono = sleep_onset_mono
         self._expected_wake_mono = expected_wake_mono
-        self._cue_times.clear()
+        # Cooldown is genuinely arm-scoped: after a WBTB wake you have been up
+        # for the best part of an hour, so a cooldown left over from before it
+        # is measuring nothing.
         self._cooldown_until = None
-        self._awakening_seen = False
 
     def halt(self, reason: str) -> None:
         """End cueing for the night. Terminal: nothing re-enters from here."""
