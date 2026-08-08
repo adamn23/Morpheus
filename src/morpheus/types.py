@@ -31,6 +31,12 @@ class EventKind(str, enum.Enum):
     CUE_DELIVERED_DURING_DETECTED_ACTIVITY = "cue_delivered_during_detected_activity"
     SIGNAL_UNAVAILABLE = "signal_unavailable"
 
+    # Protocol actions rather than observations. The members above are hedged
+    # because they are inferences about the sleeper; these two are records of
+    # what Morpheus itself did, and assert nothing about sleep state.
+    WBTB_WAKE = "wbtb_wake"
+    WBTB_RESUME = "wbtb_resume"
+
 
 class CoverageFlag(str, enum.Enum):
     """Why a given second is or is not usable for eye-region analysis.

@@ -19,7 +19,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..audio.assets import CueAsset, CueAssetRegistry
 from ..audio.player import AudioError, CuePlayer
@@ -50,6 +50,30 @@ SUSPEND_DETECT_S = 30.0
 
 # Fraction of the intended run below which the night is reported as truncated.
 _TRUNCATION_RATIO = 0.95
+
+
+@dataclass
+class WbtbPlan:
+    """A wake-back-to-bed interruption.
+
+    Erlacher & Stumbrys (2020) woke participants at 6 h from a REM period and
+    found 60 min awake outperformed 30 min; Aspy (2017) found that falling
+    asleep soon after the induction technique predicts success. Those two pull
+    in opposite directions, and the right trade-off for one sleeper is not
+    known, so every number here is a parameter rather than a constant and all
+    of them are logged per night.
+    """
+
+    at_h: float
+    awake_min: float
+    post_delay_min: float
+    #: Called while awake, to present the induction script. Returns when the
+    #: user says they are done. Injected so tests need no terminal.
+    prompt: Optional[Callable[[float], None]] = None
+
+    @property
+    def at_s(self) -> float:
+        return self.at_h * 3600.0
 
 
 @dataclass
@@ -120,6 +144,10 @@ class NightRunner:
         cue_store: CueStore,
         source: Optional[FrameSource] = None,
         dry_run: bool = False,
+        wbtb: Optional[WbtbPlan] = None,
+        alarm: Optional[CueAsset] = None,
+        alarm_player: Optional[CuePlayer] = None,
+        alarm_gain: float = 0.6,
     ) -> None:
         self._cfg = config
         self._controller = controller
@@ -130,6 +158,23 @@ class NightRunner:
         self._cues = cue_store
         self._source = source
         self._dry_run = dry_run
+        self._wbtb = wbtb
+        self._alarm = alarm
+        # The alarm needs its own player: the cue player's ceiling is the cue
+        # safety ceiling, and an alarm that respects it would not wake anyone.
+        self._alarm_player = alarm_player
+        self._alarm_gain = float(alarm_gain)
+        self._wbtb_done = False
+
+        if wbtb is not None and alarm is not None and alarm.trained:
+            # A trained asset as the wake alarm would counter-condition the cue
+            # to mean "get up", which is the one outcome the whole protocol
+            # cannot survive.
+            raise AudioError(
+                f"alarm asset '{alarm.name}' is registered as a TRAINED cue. "
+                f"Using the conditioned cue to wake you would teach you that it "
+                f"means 'get up'. Register a separate untrained alarm."
+            )
 
         self._pipeline = VisionPipeline(config) if source is not None else None
         self._aggregator = Aggregator() if source is not None else None
@@ -186,6 +231,9 @@ class NightRunner:
                         self._notes.append("frame source exhausted")
                         break
                     continue
+
+                if self._wbtb_due(frame.t_mono, started):
+                    self._run_wbtb(session_id, frame.t_mono, deadline)
 
                 self._features.append(frame)
                 command = self._controller.step(frame)
@@ -247,6 +295,82 @@ class NightRunner:
             health=self._health,
             gate_blocks=dict(self._controller.gate_blocks),
             notes=self._notes,
+        )
+
+    # ------------------------------------------------------------------ WBTB
+
+    def _wbtb_due(self, now_mono: float, started: float) -> bool:
+        return (
+            self._wbtb is not None
+            and not self._wbtb_done
+            and (now_mono - started) >= self._wbtb.at_s
+        )
+
+    def _run_wbtb(self, session_id: int, now_mono: float, deadline: float) -> None:
+        """Wake the user, present the induction script, then re-arm.
+
+        Re-arming uses `new_night=False`, so the minimum-delay clock restarts
+        from the moment the user goes back to sleep while the nightly cue
+        budget, the rolling-hour cap and any terminal safety stop all carry
+        over. Resetting those here would let a six-cue budget deliver twelve.
+        """
+        assert self._wbtb is not None
+        self._wbtb_done = True
+        plan = self._wbtb
+
+        log.info("WBTB: waking at %.2f h for %.0f min", plan.at_h, plan.awake_min)
+        self._cues.record_event(
+            session_id, now_mono, EventKind.WBTB_WAKE,
+            features={
+                "at_h": plan.at_h,
+                "awake_min": plan.awake_min,
+                "post_delay_min": plan.post_delay_min,
+            },
+        )
+
+        if not self._dry_run and self._alarm is not None and self._alarm_player is not None:
+            try:
+                waveform, _ = self._registry.load(self._alarm)
+                rendered = self._alarm_player.render(
+                    waveform, gain=self._alarm_gain, ramp_ms=800.0, duration_ms=6000.0,
+                )
+                self._alarm_player.play(rendered, blocking=True)
+            except (AudioError, OSError, ValueError) as exc:
+                # A failed alarm means sleeping through WBTB. That degrades the
+                # night; it must not end it.
+                log.error("WBTB alarm failed: %s", exc)
+                self._notes.append(f"WBTB alarm failed: {exc}")
+
+        awake_started = time.monotonic()
+        if plan.prompt is not None:
+            try:
+                plan.prompt(plan.awake_min)
+            except Exception as exc:  # noqa: BLE001 - never lose the night to the script
+                log.error("WBTB script failed: %s", exc)
+                self._notes.append(f"WBTB script failed: {type(exc).__name__}")
+        awake_s = time.monotonic() - awake_started
+
+        # The delay clock restarts from *now* — the moment of going back to
+        # sleep — not from bedtime.
+        resumed = time.monotonic()
+        self._controller.limits.min_delay_s = plan.post_delay_min * 60.0
+        self._controller.limits.__post_init__()
+        self._controller.arm(
+            sleep_onset_mono=resumed, expected_wake_mono=deadline, new_night=False
+        )
+
+        log.info(
+            "WBTB: awake %.1f min; cues resume in %.0f min, %d of the nightly "
+            "budget already used",
+            awake_s / 60.0, plan.post_delay_min, self._controller.cue_count,
+        )
+        self._cues.record_event(
+            session_id, resumed, EventKind.WBTB_RESUME,
+            features={
+                "awake_s": awake_s,
+                "post_delay_min": plan.post_delay_min,
+                "cues_used_before_wbtb": self._controller.cue_count,
+            },
         )
 
     # ------------------------------------------------------------- internals

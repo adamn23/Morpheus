@@ -64,13 +64,42 @@ def test_forbidden_vocabulary_absent(pattern: str, reason: str) -> None:
     )
 
 
+#: Events that record what *Morpheus did*, not what it inferred about the
+#: sleeper. These are exempt from the hedging rule for a specific reason: the
+#: rule exists because an inference about someone else's sleep must never be
+#: stated as fact, and "we played an alarm" is not an inference. Hedging it
+#: would be false modesty and would blur the line the rule is protecting.
+#: Membership here is the reviewed decision — anything making a claim about the
+#: sleeper belongs above, hedged.
+PROTOCOL_ACTIONS = {"wbtb_wake", "wbtb_resume"}
+
+
 def test_event_kind_is_closed_and_hedged() -> None:
-    """Every permitted label must hedge. Adding a bare claim should fail here."""
+    """Every observational label must hedge. Adding a bare claim should fail here."""
     hedges = ("probable_", "possible_", "cue_", "signal_")
     for kind in EventKind:
+        if kind.value in PROTOCOL_ACTIONS:
+            continue
         assert kind.value.startswith(hedges), (
-            f"{kind.value!r} does not hedge. Every EventKind must be qualified: "
-            "Morpheus reports what it observed, not what it concluded."
+            f"{kind.value!r} does not hedge. Every observational EventKind must be "
+            "qualified: Morpheus reports what it observed, not what it concluded. "
+            "If this is an action Morpheus took rather than an inference about the "
+            "sleeper, add it to PROTOCOL_ACTIONS — deliberately."
+        )
+
+
+def test_protocol_actions_claim_nothing_about_sleep() -> None:
+    """The exemption must not become a loophole.
+
+    An action label may say what the system did. The moment one implies a sleep
+    state, the hedging rule has been routed around rather than scoped.
+    """
+    banned = ("rem", "asleep", "dreaming", "lucid", "stage", "sleeping")
+    for value in PROTOCOL_ACTIONS:
+        assert value in {k.value for k in EventKind}, f"{value} is not an EventKind"
+        assert not any(word in value for word in banned), (
+            f"{value!r} is exempt from hedging because it describes an action, "
+            "but it names a sleep state. Those cannot both be true."
         )
 
 
@@ -83,6 +112,10 @@ def test_event_kind_membership_is_deliberate() -> None:
         "possible_awakening",
         "cue_delivered_during_detected_activity",
         "signal_unavailable",
+        # Protocol actions, added 2026-08-08 for WBTB support. See
+        # PROTOCOL_ACTIONS above for why these do not hedge.
+        "wbtb_wake",
+        "wbtb_resume",
     }
 
 

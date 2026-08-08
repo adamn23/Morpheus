@@ -83,7 +83,19 @@ PRESETS: dict[str, list[float]] = {
     "control-descending": [783.99, 659.25, 523.25],  # G5 E5 C5
     "trained-fifth": [587.33, 880.00, 587.33],       # D5 A5 D5
     "control-fourth": [880.00, 587.33, 880.00],      # A5 D5 A5
+
+    # The WBTB wake alarm. Its job is the opposite of every cue above: those are
+    # engineered not to wake you, this one has to. Deliberately unlike them —
+    # higher register, twice the length, an insistent alternation instead of a
+    # three-note contour — because a wake alarm that resembles the cue would
+    # teach you that the cue means "get up", undoing the conditioning the whole
+    # protocol rests on. Never register this as a trained asset.
+    "wbtb-alarm": [880.00, 1174.66] * 4,             # A5 D6, four times
 }
+
+#: Presets that must never be used as a sleep cue, whatever they are registered
+#: as. Checked at the point of use, not merely documented.
+WAKE_ONLY_PRESETS = frozenset({"wbtb-alarm"})
 
 
 def generate_preset(name: str, samplerate: int = DEFAULT_SAMPLERATE) -> np.ndarray:
