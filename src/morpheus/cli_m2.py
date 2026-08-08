@@ -67,6 +67,39 @@ def _wbtb_alarm(registry: CueAssetRegistry) -> CueAsset:
     return registry.create_preset(WBTB_ALARM_PRESET, trained=False)
 
 
+def _resolve_arm(conn, config, registry, asset, today: str, session_id: Optional[int] = None):
+    """Bind tonight's sealed arm to the cue that will actually play.
+
+    Returns `(asset, plays_audio, assignment_id)`. When no experiment is running
+    this is a no-op and the caller's chosen asset stands — which is Phase A, the
+    unrandomised phase.
+
+    The arm is read through `arm_for_running_night`, which audits the read as
+    machine-made and does not count it against the blind. **Nothing about the
+    arm may be printed.** The user learns it from `morpheus reveal`, after the
+    morning report exists, and that ordering is the blinding.
+    """
+    from .experiment.assignments import ExperimentStore
+    from .experiment.randomization import Arm
+
+    store = ExperimentStore(conn, config.storage.data_dir)
+    experiment = store.active()
+    if experiment is None:
+        return asset, True, None
+
+    assignment_id = store.assign_night(experiment, today, session_id=session_id)
+    arm = store.arm_for_running_night(assignment_id)
+
+    if arm is Arm.NO_CUE:
+        return asset, False, assignment_id
+    if arm is Arm.UNTRAINED_CUE:
+        # The matched twin: same timbre, note count, duration and register,
+        # differing only in contour — and never conditioned. If the pairing is
+        # missing this raises rather than substituting something unmatched.
+        return registry.matched_control_for(asset), True, assignment_id
+    return asset, True, assignment_id
+
+
 def _last_night(conn) -> dict:
     """What the most recent cueing session did, for the morning questions.
 
@@ -414,6 +447,14 @@ def night(
         typer.secho("no trained cue registered; run `morpheus cues --add-preset trained-ascending --trained`", fg=typer.colors.RED)
         raise typer.Exit(1)
 
+    # If an experiment is running, tonight's sealed arm decides which cue plays
+    # and whether one plays at all. From here on the asset is blinded: nothing
+    # downstream may print its name or its trained flag.
+    asset, condition_allows_cue, assignment_id = _resolve_arm(
+        conn, config, registry, asset, today_str()
+    )
+    blinded = assignment_id is not None
+
     recent_training = CueStore(conn).latest_training()
     if recent_training is None:
         typer.secho(
@@ -471,7 +512,10 @@ def night(
         # stepping back above the level you just asked for.
         policy.start_gain = gain
         policy.max_gain = min(policy.max_gain, gain)
-    controller = CueController(supervisor, policy=policy, config=ControllerConfig())
+    controller = CueController(
+        supervisor, policy=policy, config=ControllerConfig(),
+        condition_allows_cue=condition_allows_cue,
+    )
     sink = BufferSink() if dry_run else SoundDeviceSink()
     player = CuePlayer(sink, ceiling=limits.max_gain)
 
@@ -484,7 +528,14 @@ def night(
         config=config,
         device_profile=source.device_profile() if source else {"camera_model": "none"},
         kind="cue_night",
-        notes=f"cue={asset.name} dry_run={dry_run} camera={camera}",
+        # The asset name is the arm on a blinded night. It is recorded
+        # against the cue rows, which are sealed reading, never in session
+        # notes, which `morpheus sessions` prints.
+        notes=(
+            f"blinded assignment={assignment_id} dry_run={dry_run} camera={camera}"
+            if blinded else
+            f"cue={asset.name} dry_run={dry_run} camera={camera}"
+        ),
         repo=Path.cwd(),
     )
 
@@ -517,7 +568,10 @@ def night(
     )
 
     typer.echo("")
-    typer.echo(f"  cue            {asset.name} ({'TRAINED' if asset.trained else 'CONTROL'})")
+    if blinded:
+        typer.echo("  cue            [blinded — sealed until after tomorrow's report]")
+    else:
+        typer.echo(f"  cue            {asset.name} ({'TRAINED' if asset.trained else 'CONTROL'})")
     typer.echo(f"  mode           {'DRY RUN — no audio' if dry_run else 'AUDIO ARMED'}")
     typer.echo(f"  sensing        {'camera' if camera else 'clock only'}")
     typer.echo(f"  first cue      after {limits.min_delay_s / 3600:.1f} h")

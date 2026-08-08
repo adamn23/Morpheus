@@ -97,6 +97,24 @@ PRESETS: dict[str, list[float]] = {
 #: as. Checked at the point of use, not merely documented.
 WAKE_ONLY_PRESETS = frozenset({"wbtb-alarm"})
 
+#: Trained cue -> its acoustically matched untrained control.
+#:
+#: This pairing is what makes the control arm a control. The untrained cue is
+#: delivered at identical timing, duration, gain, ramp and count; the only thing
+#: that differs is that it was never paired with the pre-sleep conditioning. A
+#: silence arm cannot do that — it changes both whether a sound occurred and
+#: whether it was conditioned, and it does not hold arousal cost constant.
+#:
+#: `trained-ascending` / `control-descending` is the pair to use: the two are
+#: the *same three tones in reverse order*, so spectral content and total energy
+#: are identical by construction. `trained-fifth` / `control-fourth` share a
+#: frequency set but not a multiset — one repeats the low note, the other the
+#: high — so they are matched more loosely. Prefer the first pair.
+MATCHED_CONTROL: dict[str, str] = {
+    "trained-ascending": "control-descending",
+    "trained-fifth": "control-fourth",
+}
+
 
 def generate_preset(name: str, samplerate: int = DEFAULT_SAMPLERATE) -> np.ndarray:
     if name not in PRESETS:
@@ -177,6 +195,28 @@ class CueAssetRegistry:
                 "SELECT * FROM cue_assets WHERE trained = ? ORDER BY id", (int(trained),)
             ).fetchall()
         return [self._row_to_asset(r) for r in rows]
+
+    def matched_control_for(self, trained: CueAsset) -> CueAsset:
+        """The untrained cue that pairs with this trained one, creating it if needed.
+
+        Raises if the trained asset has no registered pairing. That is
+        deliberate: silently substituting an unmatched sound would turn the
+        control arm into a confound for "a different kind of sound occurred",
+        which is exactly what the pairing exists to prevent, and it would do so
+        invisibly halfway through a months-long trial.
+        """
+        control_name = MATCHED_CONTROL.get(trained.name)
+        if control_name is None:
+            raise KeyError(
+                f"cue '{trained.name}' has no acoustically matched control. "
+                f"Matched pairs: {', '.join(sorted(MATCHED_CONTROL))}. Without a "
+                f"match the control arm cannot hold sound constant, so the "
+                f"experiment would not measure conditioning."
+            )
+        for existing in self.list(trained=False):
+            if existing.name == control_name:
+                return existing
+        return self.create_preset(control_name, trained=False)
 
     def verify(self, asset: CueAsset) -> bool:
         """Confirm the file on disk still matches what was registered.

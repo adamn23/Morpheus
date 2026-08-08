@@ -49,8 +49,21 @@ class Arm(str, Enum):
 DESIGN_TWO_ARM: tuple[Arm, ...] = (Arm.TRAINED_CUE, Arm.NO_CUE)
 DESIGN_THREE_ARM: tuple[Arm, ...] = (Arm.TRAINED_CUE, Arm.UNTRAINED_CUE, Arm.NO_CUE)
 
+# Trained cue against its acoustically matched untrained twin: same timing,
+# duration, gain, ramp and count, differing only in whether the sound was
+# conditioned before sleep. This is the sharper contrast, because a no-cue arm
+# varies two things at once — whether a sound occurred *and* whether it was
+# conditioned — and does not hold arousal cost constant either.
+#
+# The cost is real and should be understood before choosing it: the
+# trained-versus-untrained effect is smaller than trained-versus-silence, so it
+# needs more nights for the same power. That is the price of a control that
+# controls something.
+DESIGN_TWO_ARM_MATCHED: tuple[Arm, ...] = (Arm.TRAINED_CUE, Arm.UNTRAINED_CUE)
+
 DESIGNS: dict[str, tuple[Arm, ...]] = {
     "two-arm": DESIGN_TWO_ARM,
+    "two-arm-matched": DESIGN_TWO_ARM_MATCHED,
     "three-arm": DESIGN_THREE_ARM,
 }
 
