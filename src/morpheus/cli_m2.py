@@ -200,6 +200,80 @@ def register(app: typer.Typer) -> None:
     app.command("calibrate")(calibrate)
     app.command("confirm")(confirm_cmd)
     app.command("review")(review_cmd)
+    app.command("phase")(phase_cmd)
+
+
+def phase_cmd(
+    enter: Optional[str] = typer.Option(
+        None, "--enter", help="'a' or 'b'. Entering B freezes the protocol."
+    ),
+    force: bool = typer.Option(False, help="Enter B despite readiness warnings."),
+    config_path: Optional[Path] = typer.Option(None, "--config"),
+) -> None:
+    """Show or change the protocol phase.
+
+    Phase A optimises the protocol; Phase B measures it. They are separated
+    because tuning is what makes Phase A nights useless for causal inference,
+    and continuing to tune after randomisation starts corrupts the trial in a
+    way that is undetectable afterwards.
+    """
+    from .experiment import phase as phase_mod
+
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    config = MorpheusConfig.load(config_path)
+    conn = open_db(config.storage.db_path)
+    state = phase_mod.current(conn)
+
+    if enter is None:
+        typer.echo(f"\nProtocol phase: {state.phase} "
+                   f"({'VALIDATE — randomised' if state.is_validating else 'MAX LD — tuning'})")
+        typer.echo(f"  Phase A nights so far   {phase_mod.phase_a_nights(conn)}")
+        if state.frozen:
+            typer.echo(f"  frozen at               {state.frozen_at}")
+            for name, value in sorted(state.frozen.items()):
+                typer.echo(f"    {name:<22} {value}")
+        if not state.is_validating:
+            problems = phase_mod.readiness(conn)
+            typer.echo("")
+            if problems:
+                typer.secho("  Not ready for Phase B:", fg=typer.colors.YELLOW)
+                for p in problems:
+                    typer.echo(f"    - {p}")
+            else:
+                typer.secho("  Ready for Phase B.", fg=typer.colors.GREEN)
+                typer.echo("    morpheus phase --enter b")
+        conn.close()
+        return
+
+    choice = enter.strip().lower()
+    if choice == "a":
+        phase_mod.return_to_a(conn)
+        typer.secho("back in Phase A — tuning allowed, nights are not trial data.",
+                    fg=typer.colors.GREEN)
+        conn.close()
+        return
+    if choice != "b":
+        typer.secho("--enter takes 'a' or 'b'", fg=typer.colors.RED)
+        conn.close()
+        raise typer.Exit(1)
+
+    typer.echo("\nFreezing the protocol. These values must not change again "
+               "until the trial ends.\n")
+    frozen: dict = {}
+    for name in phase_mod.FROZEN_PARAMETERS:
+        frozen[name] = typer.prompt(f"  {name}")
+    try:
+        state = phase_mod.enter_b(conn, frozen, force=force)
+    except ValueError as exc:
+        typer.secho(f"\n{exc}", fg=typer.colors.RED)
+        typer.echo("\nPass --force to override, and record why.")
+        conn.close()
+        raise typer.Exit(1)
+
+    typer.secho(f"\nPhase B from {state.frozen_at}.", fg=typer.colors.GREEN)
+    typer.echo("Create the experiment and pre-registration next:")
+    typer.echo("  morpheus experiment --create --design two-arm-matched")
+    conn.close()
 
 
 def _registry(config: MorpheusConfig, conn) -> CueAssetRegistry:
@@ -539,6 +613,16 @@ def night(
         repo=Path.cwd(),
     )
 
+    from .experiment import phase as phase_mod
+    phase_state = phase_mod.current(conn)
+    deviations = phase_mod.drift(conn, {
+        "gain": str(policy.start_gain),
+        "wbtb_at": str(wbtb_at),
+        "wbtb_awake_min": str(wbtb_awake_min),
+        "post_wbtb_delay_min": str(post_wbtb_delay_min),
+        "wbtb_kind": str(wbtb_kind),
+    })
+
     wbtb_plan = None
     alarm_asset = None
     alarm_player = None
@@ -568,6 +652,16 @@ def night(
     )
 
     typer.echo("")
+    typer.echo(f"  phase          {phase_state.phase} "
+               f"({'VALIDATE — this night is trial data' if phase_state.is_validating else 'MAX LD — tuning, not trial data'})")
+    if deviations:
+        # Not blocked. A deviating night is still a night; what matters is that
+        # the deviation is on the record rather than discovered during analysis
+        # months later, or never.
+        typer.secho("  PROTOCOL DRIFT — this night differs from the frozen protocol:",
+                    fg=typer.colors.RED, bold=True)
+        for d in deviations:
+            typer.secho(f"    {d}", fg=typer.colors.RED)
     if blinded:
         typer.echo("  cue            [blinded — sealed until after tomorrow's report]")
     else:
@@ -656,6 +750,11 @@ def night(
             signal.signal(signum, handler)  # type: ignore[arg-type]
 
     feature_store.finish_session(summary.status, summary.health)
+    conn.execute(
+        "UPDATE sessions SET protocol_phase = ? WHERE id = ?",
+        (phase_state.phase, session_id),
+    )
+    conn.commit()
     conn.close()
 
     typer.echo("")

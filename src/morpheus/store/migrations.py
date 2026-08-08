@@ -417,6 +417,24 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE reports ADD COLUMN minutes_to_sleep_after_wbtb REAL;
         """,
     ),
+    (
+        7,
+        """
+        -- Small key/value store for state that is neither a session nor a
+        -- report. Currently the protocol phase and its frozen parameters.
+        CREATE TABLE app_state (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
+        -- Which phase a night belonged to. Phase A nights are tuning runs and
+        -- cannot support causal inference; Phase B nights are the trial. Mixing
+        -- them in one analysis is the specific mistake this column prevents,
+        -- and it has to be recorded per night because the phase changes
+        -- part-way through the series.
+        ALTER TABLE sessions ADD COLUMN protocol_phase TEXT;
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)
