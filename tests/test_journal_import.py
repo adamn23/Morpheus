@@ -535,3 +535,50 @@ def test_claims_are_reviewed_before_weaker_hints(conn) -> None:
     store.submit(MorningReport(report_date="2026-06-03", narrative="Had an ld, it was vivid."))
 
     assert [c.report_date for c in unscored(conn)][0] == "2026-06-03"
+
+
+def test_only_hinted_dreams_are_surfaced_for_review() -> None:
+    """One night can hold five dreams and two thousand words.
+
+    The evidence for lucidity sits in one paragraph. Presenting the whole
+    night to ask a single yes/no makes the reviewer skim, and skimming is how
+    a baseline gets mis-scored.
+    """
+    from morpheus.report.review import Candidate
+
+    night = (
+        "A dream about a graduation, nothing unusual.\n\n"
+        "A dream where a sign said lucid dreaming but I missed it.\n\n"
+        "Had an ld!!??? I realised I was dreaming and did a reality check.\n\n"
+        "A dream about Minecraft updates.\n\n"
+        "A dream about an abandoned house."
+    )
+    candidate = Candidate("2025-06-22", night, [])
+    assert len(candidate.dreams) == 5
+
+    relevant = candidate.relevant_dreams()
+    assert [i for i, _, _ in relevant] == [2, 3]
+    assert "LD CLAIM" in dict((i, h) for i, _, h in relevant)[3]
+
+
+def test_evidence_snippet_centres_on_the_strongest_hint() -> None:
+    from morpheus.report.review import evidence_snippet
+
+    dream = ("padding. " * 80) + "Had an ld and I knew I was dreaming. " + ("more. " * 80)
+    snippet = evidence_snippet(dream, width=200)
+    assert "Had an ld" in snippet
+    assert len(snippet) < len(dream) / 2
+    assert snippet.startswith("...") and snippet.endswith("...")
+
+
+def test_snippet_falls_back_to_the_opening_when_nothing_matches() -> None:
+    from morpheus.report.review import evidence_snippet
+
+    assert evidence_snippet("A short ordinary dream.").startswith("A short ordinary")
+
+
+def test_separators_do_not_become_dreams_in_review() -> None:
+    from morpheus.report.review import Candidate
+
+    candidate = Candidate("2025-02-10", "First dream.\n\nWake up\n\nSecond dream.", [])
+    assert candidate.dreams == ["First dream.", "Second dream."]

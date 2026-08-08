@@ -54,6 +54,9 @@ SUGGESTIVE = [
 ]
 
 
+_SEPARATOR = re.compile(r"^\W*(wake up|woke up|awake|awoke|-{3,}|\*{3,})\W*$", re.I)
+
+
 @dataclass
 class Candidate:
     report_date: str
@@ -63,6 +66,68 @@ class Candidate:
     @property
     def suggestive(self) -> bool:
         return bool(self.hints)
+
+    @property
+    def dreams(self) -> list[str]:
+        """The night's dreams, as written: one paragraph each."""
+        return [
+            p.strip()
+            for p in re.split(r"\n\s*\n", self.narrative)
+            if p.strip() and not _SEPARATOR.match(p.strip())
+        ]
+
+    def relevant_dreams(self) -> list[tuple[int, str, list[str]]]:
+        """Only the dreams that triggered a hint, with their position.
+
+        A single night can run to five dreams and two thousand words, while the
+        evidence for lucidity sits in one paragraph. Showing the whole entry to
+        ask one yes/no makes the reviewer skim, and skimming is how a baseline
+        gets mis-scored.
+        """
+        out: list[tuple[int, str, list[str]]] = []
+        for index, dream in enumerate(self.dreams, start=1):
+            matched = [label for pattern, label in SUGGESTIVE if pattern.search(dream)]
+            if matched:
+                out.append((index, dream, matched))
+        return out
+
+
+#: Hints ordered by how much weight they carry, strongest first. The snippet
+#: is taken around the strongest match present.
+_HINT_PRIORITY = [
+    "LD CLAIM", "was dreaming", "knew dreaming", "aware dreaming",
+    "realised", "reality check", "woke in dream", "controlled dream",
+    "says lucid", "mentions ld", "ld: dream-sign note (not a claim)",
+]
+
+
+def evidence_snippet(dream: str, width: int = 340) -> str:
+    """Text around the strongest hint in this dream.
+
+    A 700-word dream with one relevant sentence should be presented as that
+    sentence. The reviewer still has the full entry a keypress away, but the
+    default is the part that actually bears on the question.
+    """
+    best = None
+    for label in _HINT_PRIORITY:
+        for pattern, name in SUGGESTIVE:
+            if name != label:
+                continue
+            match = pattern.search(dream)
+            if match:
+                best = match
+                break
+        if best:
+            break
+    if best is None:
+        return dream[:width] + ("..." if len(dream) > width else "")
+
+    centre = (best.start() + best.end()) // 2
+    lo = max(0, centre - width // 2)
+    hi = min(len(dream), centre + width // 2)
+    prefix = "..." if lo > 0 else ""
+    suffix = "..." if hi < len(dream) else ""
+    return prefix + dream[lo:hi].strip() + suffix
 
 
 def unscored(conn: sqlite3.Connection, limit: Optional[int] = None) -> list[Candidate]:

@@ -986,7 +986,7 @@ def review_cmd(
     would be fabricating the project's primary outcome.
     """
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
-    from .report.review import progress, score, unscored
+    from .report.review import evidence_snippet, progress, score, unscored
 
     config = MorpheusConfig.load(config_path)
     if not config.storage.db_path.exists():
@@ -1020,19 +1020,52 @@ def review_cmd(
     for index, candidate in enumerate(candidates, start=1):
         typer.echo("")
         typer.echo("-" * 68)
-        header = f"[{index}/{len(candidates)}]  {candidate.report_date}"
-        if candidate.hints:
-            header += f"   hints: {', '.join(candidate.hints)}"
+        dreams = candidate.dreams
+        header = f"[{index}/{len(candidates)}]  {candidate.report_date}   {len(dreams)} dream(s)"
         typer.secho(header, fg=typer.colors.CYAN, bold=True)
-        typer.echo("")
-        for line in candidate.narrative.strip().splitlines():
-            for wrapped in _wrap(line, 66) or [""]:
-                typer.echo(f"    {wrapped}")
-        typer.echo("")
 
-        answer = ""
-        while answer not in ("y", "n", "s", "q"):
-            answer = typer.prompt("  aware you were dreaming? [y/n/s/q]").strip().lower()[:1]
+        relevant = candidate.relevant_dreams()
+        show_full = False
+
+        while True:
+            if show_full:
+                typer.echo("")
+                for number, dream in enumerate(dreams, start=1):
+                    typer.secho(f"  --- dream {number}/{len(dreams)} ---", fg=typer.colors.BLUE)
+                    for line in _wrap(dream, 66):
+                        typer.echo(f"    {line}")
+                    typer.echo("")
+            elif relevant:
+                typer.echo("")
+                for number, dream, hints in relevant:
+                    typer.secho(
+                        f"  dream {number}/{len(dreams)} — {', '.join(hints)}",
+                        fg=typer.colors.YELLOW,
+                    )
+                    for line in _wrap(evidence_snippet(dream), 66):
+                        typer.echo(f"    {line}")
+                    typer.echo("")
+                typer.echo("  (showing only the dreams that matched; 'f' for the full night)")
+            else:
+                typer.echo("")
+                typer.echo("  no lucidity wording in any dream this night")
+                for line in _wrap(dreams[0], 66)[:4]:
+                    typer.echo(f"    {line}")
+                typer.echo("    ...")
+                typer.echo("")
+                typer.echo("  ('f' for the full night)")
+
+            typer.echo("")
+            answer = ""
+            while answer not in ("y", "n", "s", "q", "f"):
+                answer = typer.prompt(
+                    "  were you aware you were dreaming in ANY dream that night? "
+                    "[y/n/s/q, f=full]"
+                ).strip().lower()[:1]
+            if answer == "f" and not show_full:
+                show_full = True
+                continue
+            break
 
         if answer == "q":
             break
