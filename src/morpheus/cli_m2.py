@@ -15,7 +15,7 @@ from typing import Optional
 
 import typer
 
-from .audio.assets import PRESETS, CueAssetRegistry
+from .audio.assets import PRESETS, CueAsset, CueAssetRegistry
 from .audio.player import AudioError, BufferSink, CuePlayer, SoundDeviceSink, load_wav
 from .capture.webcam import WebcamSource
 from .config import MorpheusConfig
@@ -25,15 +25,135 @@ from .cue.safety import SafetyLimits, SafetySupervisor
 from .report.safety_monitor import check as check_sleep_quality
 from .report.safety_monitor import format_check
 from .report.schema import PRIMARY_OUTCOME_DEFINITION, MorningReport, ReportStore, today_str
-from .runtime.night import NightRunner
+from .runtime.night import NightRunner, WbtbPlan
 from .runtime.power import SleepPreventer
 from .store.cue_store import CueStore
 from .store.db import connect, open_db
 from .store.feature_store import FeatureStore
-from .training.protocol import StepKind, protocol_for, total_seconds
-from .types import HealthCounters
+from .training.protocol import (
+    TRAINING_KINDS,
+    StepKind,
+    protocol_for,
+    total_seconds,
+)
+from .types import EventKind, HealthCounters
 
 log = logging.getLogger("morpheus.cli")
+
+#: Ceiling for the WBTB alarm. Far above the cue ceiling on purpose: the alarm's
+#: job is the opposite of a cue's. It is still a ceiling, not a volume — the
+#: requested alarm gain sits below it.
+ALARM_CEILING = 0.95
+
+#: Name of the preset registered as the wake alarm.
+WBTB_ALARM_PRESET = "wbtb-alarm"
+
+
+def _wbtb_alarm(registry: CueAssetRegistry) -> CueAsset:
+    """Find or create the wake alarm, and refuse to hand back a trained cue.
+
+    Registered untrained, because it is not a cue and must never be selectable
+    as one: waking someone with their conditioned sound would teach them it
+    means 'get up', undoing the conditioning the protocol depends on.
+    """
+    for existing in registry.list():
+        if existing.name == WBTB_ALARM_PRESET:
+            if existing.trained:
+                raise typer.BadParameter(
+                    f"asset '{WBTB_ALARM_PRESET}' is registered as TRAINED. "
+                    f"Re-register it with --no-trained before running WBTB."
+                )
+            return existing
+    return registry.create_preset(WBTB_ALARM_PRESET, trained=False)
+
+
+def _last_night(conn) -> dict:
+    """What the most recent cueing session did, for the morning questions.
+
+    Used to ask about WBTB only on nights that had one, and to tell the user how
+    many cues actually fired — without revealing the experimental arm, which the
+    blinding depends on staying sealed until after the report.
+    """
+    row = conn.execute(
+        "SELECT id FROM sessions WHERE kind = 'cue_night' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return {"cues": 0, "wbtb": False}
+    session_id = row["id"]
+    cues = conn.execute(
+        "SELECT COUNT(*) FROM cues WHERE session_id = ? AND played = 1", (session_id,)
+    ).fetchone()[0]
+    wbtb = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE session_id = ? AND kind = ?",
+        (session_id, EventKind.WBTB_WAKE.value),
+    ).fetchone()[0]
+    return {"cues": cues, "wbtb": bool(wbtb)}
+
+
+def _wait_for_enter(timeout_s: float) -> bool:
+    """Block for Enter, but never past `timeout_s`. True if Enter arrived.
+
+    A bare `input()` here would be a trap: falling asleep mid-script at 05:00 is
+    a completely ordinary thing to do, and it would hang the night forever with
+    no cues and no error. Every wait in the induction script is bounded.
+    """
+    if timeout_s <= 0:
+        return False
+    try:
+        import select
+        import sys
+
+        ready, _, _ = select.select([sys.stdin], [], [], timeout_s)
+        if not ready:
+            return False
+        return sys.stdin.readline() != ""
+    except (OSError, ValueError, ImportError):
+        # No selectable stdin (piped, or a platform without it). Fall back to a
+        # plain read; EOF is handled by the caller.
+        try:
+            input()
+            return True
+        except (EOFError, KeyboardInterrupt):
+            return False
+
+
+def _wbtb_script(kind: str, awake_min: float):
+    """Return a callable that walks the induction script at the WBTB wake.
+
+    Kept short by design: sleep latency after the technique is one of only two
+    replicated predictors of success (Aspy 2017), so a long script works against
+    the thing that most reliably helps. The user may finish early with Enter —
+    going back to sleep promptly matters more than completing every step.
+    """
+    def run(_awake_min: float) -> None:
+        steps = protocol_for(kind)
+        deadline = time.monotonic() + awake_min * 60.0
+        typer.echo("")
+        typer.secho(
+            f"  WBTB — {kind}, {total_seconds(kind) / 60:.0f} min of script, "
+            f"~{awake_min:.0f} min awake at most.",
+            bold=True,
+        )
+        typer.echo("  Stay in bed if you can. Enter to advance; it advances on its own")
+        typer.echo("  if you do not, and ends by itself at the time limit.")
+        typer.echo("")
+        try:
+            for index, step in enumerate(steps, start=1):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    typer.echo("\n  time limit reached — back to sleep.")
+                    break
+                typer.secho(f"  [{index}/{len(steps)}] {step.title}", bold=True)
+                typer.echo(f"      {step.body}")
+                # Each step self-advances after its own duration, so the script
+                # completes even if you drift off holding the intention — which
+                # is the intended way to finish it, not a failure.
+                _wait_for_enter(min(float(step.seconds), max(0.0, deadline - time.monotonic())))
+        except KeyboardInterrupt:
+            typer.echo("\n  script ended early — going back to sleep is the priority.")
+        typer.echo("  Back to sleep. Cues resume shortly.\n")
+
+    return run
 
 
 def register(app: typer.Typer) -> None:
@@ -123,7 +243,12 @@ def config_ceiling(config: MorpheusConfig) -> float:
 
 
 def train(
-    kind: str = typer.Option("evening", help="'evening' or 'wbtb'."),
+    kind: str = typer.Option(
+        "evening",
+        help="'evening', 'wbtb', or 'ssild'. SSILD and MILD were similarly "
+             "effective in ILDIS (n=355) and the hybrid showed no advantage, so "
+             "treat these as alternatives to compare, not a stack.",
+    ),
     cue_id: Optional[int] = typer.Option(None, help="Cue asset id; defaults to the trained cue."),
     gain: float = typer.Option(0.2, help="Playback gain during training (you are awake)."),
     config_path: Optional[Path] = typer.Option(None, "--config"),
@@ -134,6 +259,12 @@ def train(
     inert without it — the sound works because it has been bound to a state of
     critical self-awareness beforehand.
     """
+    if kind not in TRAINING_KINDS:
+        typer.secho(
+            f"unknown kind {kind!r}; choose from {', '.join(sorted(TRAINING_KINDS))}",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     config = MorpheusConfig.load(config_path)
     conn = open_db(config.storage.db_path)
@@ -240,6 +371,19 @@ def night(
         None, help="Cue volume, 0.02-0.35. Lower this if a cue woke you; the value "
                    "is recorded per cue, unlike the OS volume slider."
     ),
+    wbtb_at: Optional[float] = typer.Option(
+        None, help="Hours after start to wake for WBTB. Omit for no WBTB."
+    ),
+    wbtb_awake_min: float = typer.Option(
+        45.0, help="Minutes awake during WBTB. 60 beat 30 in the one lab test "
+                   "(Erlacher & Stumbrys 2020); 45 hedges against nightly cost."
+    ),
+    post_wbtb_delay_min: float = typer.Option(
+        25.0, help="Minutes after returning to sleep before cues may resume."
+    ),
+    wbtb_kind: str = typer.Option(
+        "wbtb", help="Induction script at the WBTB wake: 'wbtb' (MILD) or 'ssild'."
+    ),
     allow_auto_exposure: bool = typer.Option(False, help="Daylight development only."),
     config_path: Optional[Path] = typer.Option(None, "--config"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
@@ -344,9 +488,32 @@ def night(
         repo=Path.cwd(),
     )
 
+    wbtb_plan = None
+    alarm_asset = None
+    alarm_player = None
+    if wbtb_at is not None:
+        if wbtb_kind not in TRAINING_KINDS:
+            typer.secho(
+                f"unknown --wbtb-kind {wbtb_kind!r}; choose from "
+                f"{', '.join(sorted(TRAINING_KINDS))}", fg=typer.colors.RED,
+            )
+            conn.close()
+            raise typer.Exit(1)
+        alarm_asset = _wbtb_alarm(registry)
+        # A separate player, because the cue player's ceiling is the *cue*
+        # safety ceiling and an alarm bound by it would not wake anyone.
+        alarm_player = CuePlayer(sink, ceiling=ALARM_CEILING)
+        wbtb_plan = WbtbPlan(
+            at_h=wbtb_at,
+            awake_min=wbtb_awake_min,
+            post_delay_min=post_wbtb_delay_min,
+            prompt=_wbtb_script(wbtb_kind, wbtb_awake_min),
+        )
+
     runner = NightRunner(
         config, controller=controller, player=player, asset=asset, registry=registry,
         feature_store=feature_store, cue_store=CueStore(conn), source=source, dry_run=dry_run,
+        wbtb=wbtb_plan, alarm=alarm_asset, alarm_player=alarm_player,
     )
 
     typer.echo("")
@@ -366,14 +533,33 @@ def night(
     # deadline — and it is entirely possible to configure a run where those
     # overlap. Discovering that from a silent zero-cue summary the next morning
     # wastes a night; saying so now costs nothing.
-    usable_window = hours * 3600 - limits.min_delay_s - limits.stop_before_wake_s
+    if wbtb_plan is not None:
+        # On a WBTB night the pre-WBTB delay is irrelevant to the window: no cue
+        # can fire before the wake anyway, and afterwards the delay clock is
+        # replaced by --post-wbtb-delay-min. Measuring against --delay-hours here
+        # would report "no window" for a perfectly workable night.
+        consumed = (
+            wbtb_plan.at_s + wbtb_plan.awake_min * 60 + wbtb_plan.post_delay_min * 60
+        )
+        usable_window = hours * 3600 - consumed - limits.stop_before_wake_s
+        window_advice = (
+            f"  A {hours:.1f} h night minus a {wbtb_plan.at_h:.1f} h WBTB wake, "
+            f"{wbtb_plan.awake_min:.0f} min awake, {wbtb_plan.post_delay_min:.0f} min "
+            f"settling and the {limits.stop_before_wake_s / 60:.0f} min pre-wake guard "
+            f"leaves no window.\n  Increase --hours, or wake earlier with --wbtb-at."
+        )
+    else:
+        usable_window = hours * 3600 - limits.min_delay_s - limits.stop_before_wake_s
+        window_advice = (
+            f"  A {hours:.1f} h night minus a {limits.min_delay_s / 3600:.1f} h delay "
+            f"minus the {limits.stop_before_wake_s / 60:.0f} min pre-wake guard leaves "
+            f"no window.\n  Increase --hours, or lower --delay-hours."
+        )
+
     if usable_window <= 0:
         typer.echo("")
         typer.secho(
-            f"  No cue can fire with these settings. A {hours:.1f} h night minus a "
-            f"{limits.min_delay_s / 3600:.1f} h delay minus the "
-            f"{limits.stop_before_wake_s / 60:.0f} min pre-wake guard leaves no window.\n"
-            f"  Increase --hours, or lower --delay-hours.",
+            "  No cue can fire with these settings.\n" + window_advice,
             fg=typer.colors.RED,
         )
         if not typer.confirm("  Run anyway?", default=False):
@@ -525,9 +711,35 @@ def journal(
         )
 
     typer.echo("")
-    report.cue_heard = typer.confirm("Did you hear the cue?", default=False)
-    report.cue_indirect = typer.confirm("Did a similar sound appear in the dream?", default=False)
-    report.cue_woke_me = typer.confirm("Did a sound wake you?", default=False)
+    last = _last_night(conn)
+    if last["cues"]:
+        typer.echo(f"  ({last['cues']} cues were delivered last night.)")
+
+    # Counts, not just yes/no. Gain titration needs to tell "one cue was
+    # slightly loud" from "every cue woke me", and a boolean spanning six cues
+    # cannot. The booleans are still recorded, derived from the counts.
+    report.cues_heard_count = typer.prompt(
+        "How many cues do you remember hearing?", type=int, default=0
+    )
+    report.cues_incorporated_count = typer.prompt(
+        "How many turned up *inside* a dream (a similar sound, not waking you)?",
+        type=int, default=0,
+    )
+    report.cues_woke_count = typer.prompt(
+        "How many woke you up?", type=int, default=0
+    )
+    report.cue_heard = report.cues_heard_count > 0
+    report.cue_indirect = report.cues_incorporated_count > 0
+    report.cue_woke_me = report.cues_woke_count > 0
+
+    if last["wbtb"]:
+        # Only asked when the night actually had a WBTB, so the field stays
+        # null rather than zero on nights where the question is meaningless.
+        report.minutes_to_sleep_after_wbtb = typer.prompt(
+            "Roughly how many minutes to fall back asleep after WBTB?",
+            type=float, default=15.0,
+        )
+
     report.guessed_condition = typer.prompt(
         "Guess last night's condition (trained/control/none/unsure)", default="unsure"
     )

@@ -395,6 +395,28 @@ MIGRATIONS: list[tuple[int, str]] = [
         ALTER TABLE calibration_profiles ADD COLUMN verdict TEXT;
         """,
     ),
+    (
+        6,
+        """
+        -- Counts, not booleans, for cue perception; plus WBTB sleep latency.
+        --
+        -- Gain titration has to satisfy two conditions at once: minimise
+        -- arousal *and* keep evidence that the cue was processed at all. A cue
+        -- quiet enough never to rouse you may simply be inaudible, and a trial
+        -- run on inaudible cues yields a confident null that means nothing.
+        -- Deciding that needs a rate, and the existing booleans give one bit
+        -- spanning six cues. The booleans stay: 59 imported reports have them
+        -- and nothing else.
+        ALTER TABLE reports ADD COLUMN cues_heard_count INTEGER;
+        ALTER TABLE reports ADD COLUMN cues_woke_count INTEGER;
+        ALTER TABLE reports ADD COLUMN cues_incorporated_count INTEGER;
+
+        -- Sleep latency after the WBTB wake. One of only two replicated
+        -- predictors of induction success (Aspy 2017, ILDIS 2020) and until now
+        -- unmeasured, so it could not be optimised against.
+        ALTER TABLE reports ADD COLUMN minutes_to_sleep_after_wbtb REAL;
+        """,
+    ),
 ]
 
 SCHEMA_VERSION = max(v for v, _ in MIGRATIONS)

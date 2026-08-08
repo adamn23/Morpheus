@@ -47,6 +47,22 @@ class MorningReport:
     cue_indirect: Optional[bool] = None
     cue_woke_me: Optional[bool] = None
 
+    # The same three questions as counts, which is what gain titration actually
+    # needs. Six cues a night collapsed into one bit cannot distinguish "one cue
+    # was slightly loud" from "every cue woke me". The booleans above are kept
+    # because the imported journal has them and nothing else.
+    #
+    # `cues_incorporated_count` is the one to maximise: a cue that turns up in
+    # the dream was processed *while asleep*, which is the whole objective.
+    # `cues_heard_count` is ambiguous on its own — hearing a cue may only mean
+    # you were already awake.
+    cues_heard_count: Optional[int] = None
+    cues_woke_count: Optional[int] = None
+    cues_incorporated_count: Optional[int] = None
+
+    #: Minutes from finishing the WBTB script to falling back asleep.
+    minutes_to_sleep_after_wbtb: Optional[float] = None
+
     dreams_recalled: Optional[int] = None
     vividness: Optional[int] = None             # 1-5
     sleep_quality: Optional[int] = None         # 1-5
@@ -95,9 +111,11 @@ class ReportStore:
                 session_id, report_date, submitted_at, narrative,
                 lucid_binary, lucid_confidence, knew_was_dreaming,
                 cue_heard, cue_indirect, cue_woke_me,
+                cues_heard_count, cues_woke_count, cues_incorporated_count,
+                minutes_to_sleep_after_wbtb,
                 dreams_recalled, vividness, sleep_quality, awakenings,
                 guessed_condition, notes
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(report_date) DO UPDATE SET
                 session_id=excluded.session_id,
                 submitted_at=excluded.submitted_at,
@@ -108,6 +126,10 @@ class ReportStore:
                 cue_heard=excluded.cue_heard,
                 cue_indirect=excluded.cue_indirect,
                 cue_woke_me=excluded.cue_woke_me,
+                cues_heard_count=excluded.cues_heard_count,
+                cues_woke_count=excluded.cues_woke_count,
+                cues_incorporated_count=excluded.cues_incorporated_count,
+                minutes_to_sleep_after_wbtb=excluded.minutes_to_sleep_after_wbtb,
                 dreams_recalled=excluded.dreams_recalled,
                 vividness=excluded.vividness,
                 sleep_quality=excluded.sleep_quality,
@@ -121,6 +143,8 @@ class ReportStore:
                 report.narrative,
                 _b(report.lucid_binary), report.lucid_confidence, _b(report.knew_was_dreaming),
                 _b(report.cue_heard), _b(report.cue_indirect), _b(report.cue_woke_me),
+                report.cues_heard_count, report.cues_woke_count,
+                report.cues_incorporated_count, report.minutes_to_sleep_after_wbtb,
                 report.dreams_recalled, report.vividness, report.sleep_quality,
                 report.awakenings, report.guessed_condition, report.notes,
             ),

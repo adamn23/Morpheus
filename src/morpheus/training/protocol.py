@@ -171,17 +171,96 @@ class TrainingResult:
     notes: Optional[str] = None
 
 
+# SSILD — Senses Initiated Lucid Dream. Cycles attention through sight, hearing
+# and touch, quickly at first and then slowly, and then stops. The technique is
+# *not* to concentrate: attention passes over each sense and moves on.
+#
+# Evidential status matters here. The International Lucid Dream Induction Study
+# (Aspy 2020, n=355) found SSILD and MILD **similarly effective**, and found the
+# hybrid technique showed **no advantage** over either alone. So this is offered
+# as an alternative to MILD, not as an addition that stacks with it. If the final
+# intention step is kept, that combination is a pragmatic Morpheus choice for one
+# user to evaluate against their own data — not a demonstrated improvement.
+#
+# The script is deliberately short. Aspy 2017 found that falling asleep soon
+# after finishing the technique predicts success, so a sprawling script would
+# work against the thing that most reliably helps.
+SSILD_CYCLES_QUICK = 4
+SSILD_CYCLES_SLOW = 3
+
+_SSILD_SENSES = (
+    ("sight", "Eyes closed. Rest attention on whatever is in front of your "
+              "closed eyes — darkness, shifting patterns. Do not look for "
+              "anything or try to see. Just notice, then move on."),
+    ("hearing", "Move attention to sound: the room, your breathing, ringing in "
+                "your ears if there is any. Do not listen hard. Notice, move on."),
+    ("touch", "Move attention to the body: the weight of the blanket, the "
+              "temperature of your skin, the pressure of the mattress. Notice, "
+              "move on."),
+)
+
+
+def _ssild_steps() -> list[TrainingStep]:
+    steps: list[TrainingStep] = []
+    for cycle in range(1, SSILD_CYCLES_QUICK + 1):
+        for sense, body in _SSILD_SENSES:
+            steps.append(TrainingStep(
+                key=f"ssild_quick_{cycle}_{sense}",
+                kind=StepKind.PROMPT,
+                title=f"Quick cycle {cycle}/{SSILD_CYCLES_QUICK} — {sense}",
+                body=body,
+                seconds=5,
+            ))
+    for cycle in range(1, SSILD_CYCLES_SLOW + 1):
+        for sense, body in _SSILD_SENSES:
+            steps.append(TrainingStep(
+                key=f"ssild_slow_{cycle}_{sense}",
+                kind=StepKind.PROMPT,
+                title=f"Slow cycle {cycle}/{SSILD_CYCLES_SLOW} — {sense}",
+                body=body + " Take your time now — stay with it for about half a minute.",
+                seconds=30,
+            ))
+    return steps
+
+
+#: Upper bound on any post-awakening script, in seconds. The constraint is
+#: evidential, not stylistic: time spent on the script is time not spent falling
+#: back asleep, and sleep latency after the technique is one of only two
+#: replicated predictors of success.
+MAX_POST_WAKE_SCRIPT_S = 600
+
+#: Every kind `protocol_for` understands. Used by the CLI to reject typos rather
+#: than silently running the evening script at 05:00.
+TRAINING_KINDS = ("evening", "wbtb", "ssild")
+
+#: Kinds that run after a deliberate awakening, and so must respect
+#: MAX_POST_WAKE_SCRIPT_S.
+POST_WAKE_KINDS = ("wbtb", "ssild")
+
+
 def protocol_for(kind: str) -> list[TrainingStep]:
-    """Steps for an evening or WBTB session.
+    """Steps for an evening, WBTB, or SSILD session.
 
     The WBTB version is shorter because it runs at 04:00 after a deliberate
     awakening, when the user is half asleep and the priority is getting back to
     sleep quickly with the intention held. Cutting the settle and day-review
     steps preserves the cue binding and the intention, which are the parts that
     carry the effect.
+
+    `ssild` replaces the reflective steps with sense cycles, keeping the cue
+    binding — which is what makes it a TLR protocol rather than plain SSILD —
+    and closing on the same intention step.
     """
     if kind == "wbtb":
         return [s for s in PROTOCOL if s.key not in WBTB_SKIP]
+    if kind == "ssild":
+        by_key = {s.key: s for s in PROTOCOL}
+        return [
+            by_key["cue_intro"],
+            *_ssild_steps(),
+            by_key["cue_binding"],
+            by_key["mild_intention"],
+        ]
     return list(PROTOCOL)
 
 
