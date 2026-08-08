@@ -479,3 +479,59 @@ def test_an_entry_of_only_separators_still_counts_as_one() -> None:
     from morpheus.report.importer import count_dreams
 
     assert count_dreams("Wake up\n\nwoke up") == 1
+
+
+# ------------------------------------------- the "ld" shorthand, three ways
+
+
+def _hints(text: str) -> list[str]:
+    from morpheus.report.review import SUGGESTIVE
+
+    return [label for pattern, label in SUGGESTIVE if pattern.search(text)]
+
+
+def test_ld_claims_are_labelled_as_claims() -> None:
+    """This journal abbreviates lucid dream to "ld" when claiming one."""
+    for text in ("Had an ld!!??? Basically it was...", "2nd Ld? Basically me and...",
+                 "Ld #5? Basically I have..."):
+        assert "LD CLAIM" in _hints(text), text
+
+
+def test_ld_dream_sign_notes_are_not_claims() -> None:
+    """'Ld: location, people' records what COULD have been noticed.
+
+    Four of these appear in a real journal. Treating them as lucidity claims
+    would inflate the baseline, which is the direction that makes any later
+    intervention look better than it was.
+    """
+    for text in ("Ld: location, why am I here", "Ld: behavior, location, people"):
+        hints = _hints(text)
+        assert "LD CLAIM" not in hints, text
+        assert any("dream-sign" in h for h in hints), text
+
+
+def test_bare_ld_mentions_are_flagged_but_not_claimed() -> None:
+    """One real entry reads 'related to LD, but probably not'."""
+    hints = _hints("maybe related to LD, but probably not")
+    assert "LD CLAIM" not in hints
+    assert "mentions ld" in hints
+
+
+def test_ld_does_not_match_inside_ordinary_words() -> None:
+    """old, world, could, held, field, child all contain 'ld'.
+
+    A real journal has 331 such words against 32 genuine 'ld' markers, so a
+    pattern without word boundaries would flag essentially every entry.
+    """
+    assert _hints("I walked through the old world and held the gold field child") == []
+
+
+def test_claims_are_reviewed_before_weaker_hints(conn) -> None:
+    from morpheus.report.review import unscored
+
+    store = ReportStore(conn)
+    store.submit(MorningReport(report_date="2026-06-01", narrative="A plain dream."))
+    store.submit(MorningReport(report_date="2026-06-02", narrative="Ld: location, people"))
+    store.submit(MorningReport(report_date="2026-06-03", narrative="Had an ld, it was vivid."))
+
+    assert [c.report_date for c in unscored(conn)][0] == "2026-06-03"

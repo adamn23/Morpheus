@@ -29,6 +29,19 @@ from typing import Optional
 # cost of a false suggestion is a few seconds of reading, while a missed one is
 # a silently mis-scored night.
 SUGGESTIVE = [
+    # This journal abbreviates lucid dream to "ld", but uses it three ways, so
+    # the label matters more than the match. "Had an ld", "2nd Ld?" and "Ld #5?"
+    # are claims. "Ld: location, people" is a dream-sign note about what could
+    # have been noticed and is NOT a claim — auto-scoring those would inflate the
+    # baseline. Bare mentions are often explicitly negative ("related to LD, but
+    # probably not"). Word boundaries keep old/world/could/held from matching.
+    (re.compile(
+        r"\bhad an? ld\b"                          # "Had an ld!!???"
+        r"|^\s*\d+(?:st|nd|rd|th)?\s*ld\b(?!\s*:)"  # "2nd Ld?"
+        r"|^\s*ld\s*#\s*\d+",                      # "Ld #5?"
+        re.I | re.M), "LD CLAIM"),
+    (re.compile(r"^\s*ld\s*:", re.I | re.M), "ld: dream-sign note (not a claim)"),
+    (re.compile(r"\bld\b", re.I), "mentions ld"),
     (re.compile(r"\blucid", re.I), "says lucid"),
     (re.compile(r"\b(realis|realiz)\w*\s+(that\s+)?(i|it)\b", re.I), "realised"),
     (re.compile(r"\bknew\s+(that\s+)?(i\s+was\s+)?dream", re.I), "knew dreaming"),
@@ -71,7 +84,16 @@ def unscored(conn: sqlite3.Connection, limit: Optional[int] = None) -> list[Cand
         hints = [label for pattern, label in SUGGESTIVE if pattern.search(text)]
         out.append(Candidate(row["report_date"], text, hints))
 
-    out.sort(key=lambda c: (not c.suggestive, c.report_date))
+    # Strongest evidence first: an explicit claim, then anything else
+    # suggestive, then the rest. Ordering only changes the order of the
+    # questions, never their answers.
+    def rank(candidate: Candidate) -> tuple:
+        return (
+            0 if "LD CLAIM" in candidate.hints else (1 if candidate.suggestive else 2),
+            candidate.report_date,
+        )
+
+    out.sort(key=rank)
     return out[:limit] if limit else out
 
 
