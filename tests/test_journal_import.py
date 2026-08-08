@@ -458,3 +458,24 @@ def test_baseline_stats_distinguish_unscored_from_zero(conn) -> None:
     assert stats["nights_scored"] == 0
     assert stats["lucid_rate_per_night"] is None, "must be None, never 0.0"
     assert stats["lucid_per_week"] is None
+
+
+def test_separator_lines_are_not_counted_as_dreams() -> None:
+    """A real journal wrote a bare 'Wake up' between two dreams of one night.
+
+    Counting that line as a third dream inflated the total by fifteen across
+    the journal.
+    """
+    from morpheus.report.importer import count_dreams
+
+    assert count_dreams("First dream.\n\nWake up\n\nSecond dream.") == 2
+    assert count_dreams("One.\n\nwoke up\n\nTwo.\n\n---\n\nThree.") == 3
+    assert count_dreams("One.\n\nTwo.\n\nThree.") == 3
+    assert count_dreams("Only one dream here.") == 1
+
+
+def test_an_entry_of_only_separators_still_counts_as_one() -> None:
+    """Never return zero: the night had an entry, so it had a dream."""
+    from morpheus.report.importer import count_dreams
+
+    assert count_dreams("Wake up\n\nwoke up") == 1

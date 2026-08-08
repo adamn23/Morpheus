@@ -307,14 +307,32 @@ def split_dated_prose(
     return out, warnings
 
 
+#: Lines that mark a boundary between dreams rather than being a dream.
+#: A journal that writes "Wake up" between two dreams of the same night would
+#: otherwise have that line counted as a third dream.
+_SEPARATOR_LINE = re.compile(
+    r"^\W*(wake up|woke up|awake|awoke|back to sleep|fell back asleep|"
+    r"second dream|next dream|later|---+|\*\*\*+)\W*$",
+    re.IGNORECASE,
+)
+
+
 def count_dreams(body: str) -> int:
     """Separate dreams in one night's entry, counted as paragraphs.
 
     A night with three recalled dreams is written as three paragraphs under one
     date. That is worth capturing: dreams_recalled is a secondary outcome, and
     deriving it costs nothing where the alternative is leaving it null.
+
+    Paragraphs that are only a separator are excluded. A real journal used a
+    bare "Wake up" line between dreams fifteen times, and counting those as
+    dreams inflated the total by fifteen.
     """
-    paragraphs = [p for p in re.split(r"\n\s*\n", body) if p.strip()]
+    paragraphs = [
+        p.strip()
+        for p in re.split(r"\n\s*\n", body)
+        if p.strip() and not _SEPARATOR_LINE.match(p.strip())
+    ]
     return max(1, len(paragraphs))
 
 
