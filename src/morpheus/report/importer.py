@@ -310,9 +310,13 @@ def split_dated_prose(
 #: Lines that mark a boundary between dreams rather than being a dream.
 #: A journal that writes "Wake up" between two dreams of the same night would
 #: otherwise have that line counted as a third dream.
+#: Kept deliberately narrow. An earlier version also listed "second dream",
+#: "next dream" and "later", which match ordinary dream text — a paragraph
+#: reading "Second dream." was deleted as a separator, and the count came back
+#: lower than before the fix. A separator must be a phrase nobody would write
+#: as the content of a dream.
 _SEPARATOR_LINE = re.compile(
-    r"^\W*(wake up|woke up|awake|awoke|back to sleep|fell back asleep|"
-    r"second dream|next dream|later|---+|\*\*\*+)\W*$",
+    r"^\W*(wake up|woke up|awake|awoke|-{3,}|\*{3,}|={3,})\W*$",
     re.IGNORECASE,
 )
 
