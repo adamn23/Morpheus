@@ -39,6 +39,18 @@ _OUTCOME_EVENTS = {
     Outcome.POSSIBLE_AWAKENING.value: EventKind.POSSIBLE_AWAKENING,
 }
 
+# Divergence between wall clock and monotonic clock above which the machine is
+# taken to have been suspended. On macOS `time.monotonic()` is CLOCK_UPTIME_RAW,
+# which does not advance during system sleep, so a suspend leaves *no* monotonic
+# gap — `runtime.recorder`'s gap detector compares monotonic against monotonic
+# and is structurally blind to it. Wall-versus-monotonic is the only signal that
+# sees it. Thirty seconds is far above ordinary NTP correction and far below any
+# suspend worth reporting.
+SUSPEND_DETECT_S = 30.0
+
+# Fraction of the intended run below which the night is reported as truncated.
+_TRUNCATION_RATIO = 0.95
+
 
 @dataclass
 class NightSummary:
@@ -54,6 +66,45 @@ class NightSummary:
     health: HealthCounters = field(default_factory=HealthCounters)
     gate_blocks: dict[str, int] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+
+    #: What the run was asked for, so "no cues fired" can be distinguished from
+    #: "the run never reached the hours in which cues were permitted".
+    intended_s: float = 0.0
+    #: Wall-clock span from arm to finish. Exceeds `duration_s` by the time the
+    #: machine spent suspended.
+    wall_elapsed_s: float = 0.0
+    #: Estimated time suspended. Non-zero means the sleep assertion was lost.
+    suspended_s: float = 0.0
+
+    @property
+    def truncated(self) -> bool:
+        return self.duration_s < self.intended_s * _TRUNCATION_RATIO
+
+    @property
+    def suspended(self) -> bool:
+        return self.suspended_s >= SUSPEND_DETECT_S
+
+    def defects(self) -> list[str]:
+        """Reasons this night should not be analysed as a clean observation.
+
+        A night that stopped early or slept through its cueing window produces
+        zero cues and no error, which is indistinguishable from a night the
+        policy legitimately declined to cue. Left unflagged it enters the
+        analysis as a real control-like observation and biases the result
+        toward no effect. Naming the defect is what keeps it out.
+        """
+        out: list[str] = []
+        if self.truncated:
+            out.append(
+                f"ran {self.duration_s / 3600:.2f} h of an intended "
+                f"{self.intended_s / 3600:.2f} h — cueing window may never have opened"
+            )
+        if self.suspended:
+            out.append(
+                f"machine suspended for about {self.suspended_s / 60:.0f} min "
+                f"— the sleep assertion was lost; elapsed time is not sleep time"
+            )
+        return out
 
 
 class NightRunner:
@@ -106,6 +157,14 @@ class NightRunner:
 
         started = time.monotonic()
         deadline = started + hours * 3600.0
+        # Wall clock is tracked alongside monotonic for two reasons: it is the
+        # only way to see a suspend (see SUSPEND_DETECT_S), and it bounds the
+        # run in real time. Without the wall deadline a machine that slept for
+        # three hours would keep cueing three hours past the intended wake —
+        # into the morning, with the user awake and out of bed, since
+        # `stop_before_wake` is reckoned in monotonic time too.
+        started_wall = time.time()
+        wall_deadline = started_wall + hours * 3600.0
         status = "completed"
 
         if self._source is not None:
@@ -120,7 +179,7 @@ class NightRunner:
         )
 
         try:
-            while not self._stop and time.monotonic() < deadline:
+            while not self._stop and time.monotonic() < deadline and time.time() < wall_deadline:
                 frame = self._next_frame()
                 if frame is None:
                     if self._source is not None and self._source.exhausted:
@@ -160,10 +219,25 @@ class NightRunner:
         if self._stop and status == "completed":
             status = "stopped_by_user"
 
+        elapsed = time.monotonic() - started
+        wall_elapsed = time.time() - started_wall
+        # Clamp: wall clock can step backwards over an NTP correction, and a
+        # negative suspend is meaningless.
+        suspended = max(0.0, wall_elapsed - elapsed)
+        if suspended >= SUSPEND_DETECT_S:
+            log.warning(
+                "machine appears to have been suspended for %.0f s during the run; "
+                "the sleep assertion was lost", suspended,
+            )
+            self._notes.append(f"suspended ~{suspended / 60:.0f} min mid-run")
+
         return NightSummary(
             session_id=session_id,
             status=status,
-            duration_s=time.monotonic() - started,
+            duration_s=elapsed,
+            intended_s=hours * 3600.0,
+            wall_elapsed_s=wall_elapsed,
+            suspended_s=suspended,
             cues_played=self._cues_played,
             cues_failed=self._cues_failed,
             outcomes=dict(self._outcomes),

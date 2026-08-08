@@ -7,6 +7,7 @@ the main Typer app in cli.py.
 from __future__ import annotations
 
 import logging
+import signal
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -30,6 +31,7 @@ from .store.cue_store import CueStore
 from .store.db import connect, open_db
 from .store.feature_store import FeatureStore
 from .training.protocol import StepKind, protocol_for, total_seconds
+from .types import HealthCounters
 
 log = logging.getLogger("morpheus.cli")
 
@@ -359,22 +361,48 @@ def night(
         typer.echo(f"  cue window     {usable_window / 3600:.1f} h wide")
     typer.echo("")
 
-    with SleepPreventer(enabled=config.recorder.prevent_system_sleep) as sleeper:
-        if not sleeper.active:
-            typer.secho(f"warning: {sleeper.status}", fg=typer.colors.YELLOW)
-        try:
-            summary = runner.run(hours=hours, session_id=session_id)
-        except AudioError as exc:
-            typer.secho(f"could not start: {exc}", fg=typer.colors.RED)
-            conn.close()
-            raise typer.Exit(1)
+    # Ctrl-C is documented above as the way to stop a night, so it has to end
+    # the run through the normal path. Left to the default handler it raises
+    # KeyboardInterrupt — a BaseException, so the runner's `except Exception`
+    # does not see it — and the session row stays at status='running' with no
+    # end time, no summary, and no defect flag. That is precisely the silent
+    # artefact the defect reporting exists to prevent. Ask the loop to stop
+    # instead; a second signal falls through to the default and hard-exits.
+    previous: dict[int, object] = {}
+
+    def _on_signal(signum: int, _frame: object) -> None:
+        typer.echo("\n  stopping cleanly — finishing the session record...")
+        signal.signal(signum, previous.get(signum, signal.SIG_DFL))  # type: ignore[arg-type]
+        runner.request_stop()
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        previous[signum] = signal.getsignal(signum)
+        signal.signal(signum, _on_signal)
+
+    try:
+        with SleepPreventer(enabled=config.recorder.prevent_system_sleep) as sleeper:
+            if not sleeper.active:
+                typer.secho(f"warning: {sleeper.status}", fg=typer.colors.YELLOW)
+            try:
+                summary = runner.run(hours=hours, session_id=session_id)
+            except AudioError as exc:
+                typer.secho(f"could not start: {exc}", fg=typer.colors.RED)
+                feature_store.finish_session("aborted_audio_error", HealthCounters())
+                conn.close()
+                raise typer.Exit(1)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)  # type: ignore[arg-type]
 
     feature_store.finish_session(summary.status, summary.health)
     conn.close()
 
     typer.echo("")
     typer.echo(f"night finished: {summary.status}  (final state: {summary.final_state})")
-    typer.echo(f"  duration       {summary.duration_s / 3600:.2f} h")
+    typer.echo(
+        f"  duration       {summary.duration_s / 3600:.2f} h "
+        f"of {summary.intended_s / 3600:.2f} h intended"
+    )
     typer.echo(f"  cues played    {summary.cues_played}")
     if summary.cues_failed:
         typer.secho(f"  cues failed    {summary.cues_failed}", fg=typer.colors.YELLOW)
@@ -389,6 +417,18 @@ def night(
         typer.secho(f"  halted         {summary.halted_reason}", fg=typer.colors.YELLOW)
     for note in summary.notes:
         typer.echo(f"  note           {note}")
+
+    defects = summary.defects()
+    if defects:
+        typer.echo("")
+        typer.secho("  DEFECTIVE NIGHT — do not analyse as a clean observation:",
+                    fg=typer.colors.RED, bold=True)
+        for defect in defects:
+            typer.secho(f"    - {defect}", fg=typer.colors.RED)
+        typer.echo("")
+        typer.echo("  Still write the report; note the defect in it so the night can be")
+        typer.echo("  excluded on a documented rule rather than on how the numbers look.")
+
     typer.echo("")
     typer.echo("Write your dream report before you look at anything else: morpheus journal")
 
