@@ -7,9 +7,16 @@ seconds as though nothing happened. Preventing the sleep is the first defence;
 detecting the gap anyway (see `runtime.recorder`) is the second, because the
 assertion can be lost to a lid close or a power event.
 
-`caffeinate -dimsu` is used rather than an IOPMAssertion via ctypes: it is a
-supported system binary, it dies with its child, and it needs no framework
-bindings. The cost is one subprocess.
+`caffeinate` is used rather than an IOPMAssertion via ctypes: it is a supported
+system binary, it dies with its child, and it needs no framework bindings. The
+cost is one subprocess.
+
+**The display must be allowed to sleep.** `-d` holds the screen on and `-u`
+actively turns it on, and either one puts a lit screen next to the pillow for
+eight hours. This project's primary risk is degrading the sleep it is measuring,
+so a light source at the bedside is both a harm and an uncontrolled confound
+across every night of the study. Keeping the system awake and the display dark
+are separate assertions, and only the first is wanted here.
 """
 
 from __future__ import annotations
@@ -55,8 +62,9 @@ class SleepPreventer:
             return
         try:
             self._proc = subprocess.Popen(
-                # -d display, -i idle, -m disk, -s system-on-AC, -u user-active
-                [binary, "-dimsu"],
+                # -i idle, -m disk, -s system-on-AC. Deliberately no -d/-u:
+                # see the module docstring. The screen must go dark.
+                [binary, "-ims"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
