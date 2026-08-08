@@ -236,6 +236,10 @@ def night(
         None, help="Minutes before the end of the run after which no cue may fire."
     ),
     cooldown_min: Optional[float] = typer.Option(None, help="Override the minimum cooldown."),
+    gain: Optional[float] = typer.Option(
+        None, help="Cue volume, 0.02-0.35. Lower this if a cue woke you; the value "
+                   "is recorded per cue, unlike the OS volume slider."
+    ),
     allow_auto_exposure: bool = typer.Option(False, help="Daylight development only."),
     config_path: Optional[Path] = typer.Option(None, "--config"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
@@ -308,7 +312,22 @@ def night(
     limits.__post_init__()  # re-validate after overrides
 
     supervisor = SafetySupervisor(limits=limits)
-    controller = CueController(supervisor, policy=ScheduledPolicy(), config=ControllerConfig())
+    # Volume belongs in the database, not in the OS volume slider. The slider is
+    # global, unrecorded, and changed by anything that plays a sound, so a night
+    # tuned with it is not reproducible and not comparable to any other night.
+    policy = ScheduledPolicy()
+    if gain is not None:
+        if not limits.min_gain <= gain <= limits.max_gain:
+            typer.secho(
+                f"gain must be between {limits.min_gain} and {limits.max_gain}",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(1)
+        # Both ends: `start_gain` is where it begins, `max_gain` stops the policy
+        # stepping back above the level you just asked for.
+        policy.start_gain = gain
+        policy.max_gain = min(policy.max_gain, gain)
+    controller = CueController(supervisor, policy=policy, config=ControllerConfig())
     sink = BufferSink() if dry_run else SoundDeviceSink()
     player = CuePlayer(sink, ceiling=limits.max_gain)
 
@@ -337,6 +356,8 @@ def night(
     typer.echo(f"  first cue      after {limits.min_delay_s / 3600:.1f} h")
     typer.echo(f"  caps           {limits.max_cues_per_night}/night, {limits.max_cues_per_hour}/hour, "
                f"{limits.min_cooldown_s / 60:.0f} min cooldown")
+    typer.echo(f"  cue gain       {policy.start_gain:.3f}"
+               f"{' (overridden)' if gain is not None else ''}")
     typer.echo(f"  volume ceiling {limits.max_gain:.2f} (hard, not adjustable by policy)")
     typer.echo(f"  stop           Ctrl-C, or turn the speaker off")
 
