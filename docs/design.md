@@ -1,4 +1,4 @@
-# Morpheus — System Design Document v0.1
+# Morpheus: System Design Document v0.1
 
 **Status:** Design for review. No code written.
 **Repository:** `/Users/adam/Morpheus` — empty except a `LICENSE`, one commit (`077e789`), remote `github.com/adamn23/Morpheus`. Nothing to reuse; this is a greenfield design.
@@ -11,9 +11,7 @@
 
 ## Context
 
-You want a closed-loop lucid-dream induction system built from a camera, a computer, and a speaker. You asked me to be critical rather than accept the premise. After grounding the design in the current literature, **I am recommending an architecture materially different from the one you proposed**, for three reasons that surfaced during research:
-
-1. **The evidence-backed part of this system is not the camera — it is the cue-conditioning protocol.** Targeted Lucidity Reactivation (TLR) has produced replicated effects using *purely scheduled* audio cues with **no sleep sensing at all**.
+1. **The evidence-backed part of this system is not the camera, it is the cue-conditioning protocol.** Targeted Lucidity Reactivation (TLR) has produced replicated effects using *purely scheduled* audio cues with **no sleep sensing at all**.
 2. **A silicon camera physically cannot see eye movement through a closed eyelid.** The published work that achieves this uses short-wave infrared (0.9–1.7 μm, InGaAs sensors). Webcams and Pi NoIR cameras cut off around 1000 nm, and the eyelid is effectively opaque there. What remains observable is the much weaker *corneal bulge deforming the lid surface* — real, but small, and requiring a near-frontal, close, stable view.
 3. **You are a side/stomach sleeper.** That is close to the worst case for any face-facing camera. Your eye region will be turned away, pillow-occluded, or both, for a large and currently unmeasured fraction of the night.
 
