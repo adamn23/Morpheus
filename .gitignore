@@ -19,5 +19,10 @@ data/
 *.mp4
 *.avi
 
-# Local research notes — deliberately untracked.
-notes/
+# Local research notes. Exploratory working documents kept alongside the real
+# docs for convenience, deliberately untracked so they stay off the public repo.
+docs/athena-plan.md
+docs/daily-lucidity.md
+docs/reentry-hypothesis.md
+docs/research-plan.md
+docs/stages.md
