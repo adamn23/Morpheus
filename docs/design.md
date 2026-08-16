@@ -1,8 +1,5 @@
 # Morpheus: System Design Document v0.1
 
-**Status:** Design for review. No code written.
-**Repository:** `/Users/adam/Morpheus` — empty except a `LICENSE`, one commit (`077e789`), remote `github.com/adamn23/Morpheus`. Nothing to reuse; this is a greenfield design.
-
 > **Licensing note (updated 2026-08-07).** The project was initially AGPL-3.0 and is now
 > All Rights Reserved. Passages below written against the original licence have been
 > corrected; the architecture and evidence review are unaffected.
