@@ -16,8 +16,8 @@ classifiers = ["Private :: Do Not Upload"]
 license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
 
-# Every entry is justified in docs/design.md §8. PyTorch remains explicitly
-# out of scope until M4 passes with labelled reference data (design.md §11):
+# Kept deliberately small. PyTorch stays out until M4 passes with labelled
+# reference data:
 # a sequence model trained on an unvalidated target would fit noise.
 dependencies = [
     "opencv-python>=4.10",  # capture, quality metrics, YuNet presence, motion

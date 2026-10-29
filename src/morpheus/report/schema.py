@@ -2,7 +2,7 @@
 
 Everything else in Morpheus exists to influence the `lucid_binary` field of this
 table. It is worth stating that plainly, because it is easy to spend months on a
-vision pipeline and treat the questionnaire as an afterthought — when the
+vision pipeline and treat the questionnaire as an afterthought: when the
 questionnaire *is* the measurement, and the vision pipeline is a hypothesis
 about how to move it.
 
@@ -13,7 +13,7 @@ Two design commitments follow from that:
   2. `guessed_condition` is collected on every report. The user is developer,
      participant and analyst simultaneously, so blinding will sometimes fail.
      Recording the guess makes unblinding measurable rather than something to be
-     assumed away (design.md §15.2).
+     assumed away.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class MorningReport:
     knew_was_dreaming: Optional[bool] = None    # asked separately on purpose
 
     # Cue perception. Kept distinct: a cue can be heard, woven into the dream
-    # without being recognised, or simply wake the person — three very different
+    # without being recognised, or simply wake the person: three very different
     # results that a single "did you hear it" question would collapse.
     cue_heard: Optional[bool] = None
     cue_indirect: Optional[bool] = None
@@ -54,7 +54,7 @@ class MorningReport:
     #
     # `cues_incorporated_count` is the one to maximise: a cue that turns up in
     # the dream was processed *while asleep*, which is the whole objective.
-    # `cues_heard_count` is ambiguous on its own — hearing a cue may only mean
+    # `cues_heard_count` is ambiguous on its own: hearing a cue may only mean
     # you were already awake.
     cues_heard_count: Optional[int] = None
     cues_woke_count: Optional[int] = None
@@ -76,7 +76,7 @@ class MorningReport:
         """Range checks. Returns problems rather than raising.
 
         A report submitted at 06:00 with one field out of range should be
-        corrected, not discarded — the narrative is irreplaceable.
+        corrected, not discarded: the narrative is irreplaceable.
         """
         problems: list[str] = []
         for name, lo, hi in (

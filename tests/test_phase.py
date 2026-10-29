@@ -1,7 +1,7 @@
 """Phase A optimises the protocol; Phase B measures it.
 
 The mistake this guards against is drifting from one into the other without
-noticing — continuing to nudge the gain "just a little" after randomisation has
+noticing: continuing to nudge the gain "just a little" after randomisation has
 started. That turns the trial into a comparison between arms whose protocol
 differed in unrecorded ways, and it is undetectable after the fact.
 """
@@ -64,7 +64,7 @@ class TestEnteringB:
     def test_refuses_when_no_cue_was_ever_incorporated(self, conn):
         """Zero arousal with zero incorporation may just mean the cue is
         inaudible. Running a trial at that level yields a confident null that
-        means nothing — the exact failure two-sided titration exists to avoid."""
+        means nothing: the exact failure two-sided titration exists to avoid."""
         _nights(conn, ph.MIN_PHASE_A_NIGHTS, incorporated=0, woke=0)
         with pytest.raises(ValueError, match="below the perceptual threshold"):
             ph.enter_b(conn, _frozen())

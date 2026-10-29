@@ -2,14 +2,14 @@
 
 Composes the M0 recorder with the M2 cue controller. Two modes:
 
-  * **with camera** — features drive the sensing gates, so a cue is suppressed
+  * **with camera**: features drive the sensing gates, so a cue is suppressed
     while the body is moving and the response to each cue is observed.
-  * **clock only** — no camera at all. Feature frames are synthesised empty and
+  * **clock only**: no camera at all. Feature frames are synthesised empty and
     the sensing gates record `unavailable`.
 
 Clock-only is a first-class mode, not a fallback. The published TLR protocol
 used no sensing whatsoever, so this is the arm with actual evidence behind it,
-and the camera has to earn its way in by beating it (design.md §8). It also
+and the camera has to earn its way in by beating it. It also
 means a broken camera degrades the night rather than ending it.
 """
 
@@ -42,7 +42,7 @@ _OUTCOME_EVENTS = {
 # Divergence between wall clock and monotonic clock above which the machine is
 # taken to have been suspended. On macOS `time.monotonic()` is CLOCK_UPTIME_RAW,
 # which does not advance during system sleep, so a suspend leaves *no* monotonic
-# gap — `runtime.recorder`'s gap detector compares monotonic against monotonic
+# gap: `runtime.recorder`'s gap detector compares monotonic against monotonic
 # and is structurally blind to it. Wall-versus-monotonic is the only signal that
 # sees it. Thirty seconds is far above ordinary NTP correction and far below any
 # suspend worth reporting.
@@ -121,12 +121,12 @@ class NightSummary:
         if self.truncated:
             out.append(
                 f"ran {self.duration_s / 3600:.2f} h of an intended "
-                f"{self.intended_s / 3600:.2f} h — cueing window may never have opened"
+                f"{self.intended_s / 3600:.2f} h: cueing window may never have opened"
             )
         if self.suspended:
             out.append(
-                f"machine suspended for about {self.suspended_s / 60:.0f} min "
-                f"— the sleep assertion was lost; elapsed time is not sleep time"
+                f"machine suspended for about {self.suspended_s / 60:.0f} min; "
+                f"the sleep assertion was lost, so elapsed time is not sleep time"
             )
         return out
 
@@ -205,7 +205,7 @@ class NightRunner:
         # Wall clock is tracked alongside monotonic for two reasons: it is the
         # only way to see a suspend (see SUSPEND_DETECT_S), and it bounds the
         # run in real time. Without the wall deadline a machine that slept for
-        # three hours would keep cueing three hours past the intended wake —
+        # three hours would keep cueing three hours past the intended wake:
         # into the morning, with the user awake and out of bed, since
         # `stop_before_wake` is reckoned in monotonic time too.
         started_wall = time.time()
@@ -218,7 +218,7 @@ class NightRunner:
         self._controller.arm(sleep_onset_mono=started, expected_wake_mono=deadline)
         log.info(
             "night armed: %s cue '%s', %s",
-            "DRY RUN — no audio" if self._dry_run else "audio armed",
+            "DRY RUN: no audio" if self._dry_run else "audio armed",
             self._asset.name,
             "camera active" if self._source else "clock only (no camera)",
         )
@@ -350,8 +350,8 @@ class NightRunner:
                 self._notes.append(f"WBTB script failed: {type(exc).__name__}")
         awake_s = time.monotonic() - awake_started
 
-        # The delay clock restarts from *now* — the moment of going back to
-        # sleep — not from bedtime.
+        # The delay clock restarts from *now* (the moment of going back to
+        # sleep) not from bedtime.
         resumed = time.monotonic()
         self._controller.limits.min_delay_s = plan.post_delay_min * 60.0
         self._controller.limits.__post_init__()

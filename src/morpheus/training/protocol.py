@@ -2,7 +2,7 @@
 
 This is the evidence-backed core of Morpheus, and it is worth being explicit
 about that: in the published trials the cue itself is inert without this. The
-sound does nothing on its own — it works because it has been bound to a state of
+sound does nothing on its own: it works because it has been bound to a state of
 critical self-awareness beforehand. A system that cued perfectly and trained
 badly would be a worse version of a system that only trained.
 
@@ -11,7 +11,7 @@ the cue is its delivery mechanism.
 
 Adherence is recorded per step because it is the most plausible alternative
 explanation for any positive result. If lucidity rises and training engagement
-rose alongside it, the cue timing has explained nothing (design.md §14).
+rose alongside it, the cue timing has explained nothing.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ PROTOCOL: list[TrainingStep] = [
         title="Settle",
         body=(
             "Sit or lie comfortably. Let your breathing slow. You are not trying to "
-            "fall asleep yet — you are getting attentive."
+            "fall asleep yet: you are getting attentive."
         ),
         seconds=45,
     ),
@@ -70,7 +70,7 @@ PROTOCOL: list[TrainingStep] = [
         title="How did you get here?",
         body=(
             "Trace the last few minutes backwards, concretely. Where were you before "
-            "this? And before that? In a dream this chain breaks or turns vague — "
+            "this? And before that? In a dream this chain breaks or turns vague: "
             "that break is the thing you are training yourself to notice."
         ),
         seconds=60,
@@ -104,7 +104,7 @@ PROTOCOL: list[TrainingStep] = [
         body=(
             "Pinch your nose closed and try to breathe in through it. Really try. In "
             "a dream the breath often passes through. Alternatively, read a line of "
-            "text, look away, and read it again — dream text tends not to hold still."
+            "text, look away, and read it again: dream text tends not to hold still."
         ),
         seconds=30,
     ),
@@ -127,7 +127,7 @@ PROTOCOL: list[TrainingStep] = [
         body=(
             "In first person, vividly: you are in a dream, you hear the sound, you "
             "realise you are dreaming, and you stay calm and stay asleep. Rehearse "
-            "the staying-calm part — excitement is what usually ends a lucid dream."
+            "the staying-calm part: excitement is what usually ends a lucid dream."
         ),
         seconds=60,
     ),
@@ -136,7 +136,7 @@ PROTOCOL: list[TrainingStep] = [
         kind=StepKind.INPUT,
         title="Your dream signs",
         body=(
-            "Name a recurring feature of your dreams — a place, person, situation, or "
+            "Name a recurring feature of your dreams: a place, person, situation, or "
             "feeling. Picture noticing it and becoming lucid. Leave blank if you do "
             "not have one yet; your journal will surface them over time."
         ),
@@ -171,7 +171,7 @@ class TrainingResult:
     notes: Optional[str] = None
 
 
-# SSILD — Senses Initiated Lucid Dream. Cycles attention through sight, hearing
+# SSILD: Senses Initiated Lucid Dream. Cycles attention through sight, hearing
 # and touch, quickly at first and then slowly, and then stops. The technique is
 # *not* to concentrate: attention passes over each sense and moves on.
 #
@@ -180,7 +180,7 @@ class TrainingResult:
 # hybrid technique showed **no advantage** over either alone. So this is offered
 # as an alternative to MILD, not as an addition that stacks with it. If the final
 # intention step is kept, that combination is a pragmatic Morpheus choice for one
-# user to evaluate against their own data — not a demonstrated improvement.
+# user to evaluate against their own data, not a demonstrated improvement.
 #
 # The script is deliberately short. Aspy 2017 found that falling asleep soon
 # after finishing the technique predicts success, so a sprawling script would
@@ -190,7 +190,7 @@ SSILD_CYCLES_SLOW = 3
 
 _SSILD_SENSES = (
     ("sight", "Eyes closed. Rest attention on whatever is in front of your "
-              "closed eyes — darkness, shifting patterns. Do not look for "
+              "closed eyes: darkness, shifting patterns. Do not look for "
               "anything or try to see. Just notice, then move on."),
     ("hearing", "Move attention to sound: the room, your breathing, ringing in "
                 "your ears if there is any. Do not listen hard. Notice, move on."),
@@ -207,7 +207,7 @@ def _ssild_steps() -> list[TrainingStep]:
             steps.append(TrainingStep(
                 key=f"ssild_quick_{cycle}_{sense}",
                 kind=StepKind.PROMPT,
-                title=f"Quick cycle {cycle}/{SSILD_CYCLES_QUICK} — {sense}",
+                title=f"Quick cycle {cycle}/{SSILD_CYCLES_QUICK}: {sense}",
                 body=body,
                 seconds=5,
             ))
@@ -216,8 +216,8 @@ def _ssild_steps() -> list[TrainingStep]:
             steps.append(TrainingStep(
                 key=f"ssild_slow_{cycle}_{sense}",
                 kind=StepKind.PROMPT,
-                title=f"Slow cycle {cycle}/{SSILD_CYCLES_SLOW} — {sense}",
-                body=body + " Take your time now — stay with it for about half a minute.",
+                title=f"Slow cycle {cycle}/{SSILD_CYCLES_SLOW}: {sense}",
+                body=body + " Take your time now; stay with it for about half a minute.",
                 seconds=30,
             ))
     return steps
@@ -248,7 +248,7 @@ def protocol_for(kind: str) -> list[TrainingStep]:
     carry the effect.
 
     `ssild` replaces the reflective steps with sense cycles, keeping the cue
-    binding — which is what makes it a TLR protocol rather than plain SSILD —
+    binding (which is what makes it a TLR protocol rather than plain SSILD)
     and closing on the same intention step.
     """
     if kind == "wbtb":

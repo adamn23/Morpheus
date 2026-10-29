@@ -185,7 +185,7 @@ def test_authorization_granted_only_after_a_passing_record(conn) -> None:
 
 
 def test_g9_absent_from_the_gate_stack_in_scheduled_mode() -> None:
-    """Not auto-passing — absent. A gate snapshot should never suggest eye
+    """Not auto-passing: absent. A gate snapshot should never suggest eye
     activity had a say when it did not."""
     controller = CueController(SafetySupervisor(limits=SafetyLimits(min_delay_s=0.0)))
     controller.arm(0.0)

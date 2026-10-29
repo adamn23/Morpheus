@@ -273,7 +273,7 @@ def test_zero_or_more_cap_is_always_respected(cap) -> None:
 def test_gate_snapshot_records_every_active_gate() -> None:
     """Stored with each cue so a night can be re-examined without re-running it.
 
-    G9 is excluded here because it is not merely passing in scheduled mode — it
+    G9 is excluded here because it is not merely passing in scheduled mode: it
     is absent. A snapshot that listed it as passed would imply eye activity had
     been consulted and approved, when it was never consulted at all.
     """

@@ -2,7 +2,7 @@
 
 Every consumer of imagery talks to this protocol, never to a camera directly.
 That is what makes `FileReplaySource` possible, and replay is what makes the
-whole system testable without sleeping (design.md §17, §21): a detector change
+whole system testable without sleeping: a detector change
 can be re-run over the full corpus of recorded nights in minutes.
 """
 

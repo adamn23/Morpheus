@@ -5,14 +5,14 @@ one. The adaptive layer (M5) will eventually be choosing cue volume and timing
 from outcome data. A learner optimising "cue incorporation" with no constraint
 would discover that louder cues are noticed more often, right up until it is
 waking the user every night. The design's answer is that safety limits live
-outside the learner's action space entirely (design.md §12.5, §24).
+outside the learner's action space entirely.
 
 So: the policy *proposes*, the supervisor *disposes*. Every cue passes through
 `authorize()`, which knows nothing about policies, learning, or experiments.
 It counts, it clocks, and it says no.
 
 If the supervisor and a policy ever disagree, the supervisor wins and the
-disagreement is recorded as a defect — a policy asking for something forbidden
+disagreement is recorded as a defect: a policy asking for something forbidden
 is a bug worth seeing, not a condition to handle quietly.
 """
 
@@ -122,7 +122,7 @@ class SafetySupervisor:
         """Start a new night. Clears everything that is budgeted per night.
 
         Separated from `arm` because a night can legitimately be armed more than
-        once — a WBTB wake re-arms with a new sleep onset — and the whole-night
+        once (a WBTB wake re-arms with a new sleep onset) and the whole-night
         safety budget must not restart when it does.
         """
         self._cue_times.clear()
@@ -223,7 +223,7 @@ class SafetySupervisor:
                 f"{self.limits.max_gain:.3f} at t={now_mono:.0f}"
             )
             log.error(
-                "policy requested gain %.3f above ceiling %.3f — clamped, recorded as defect",
+                "policy requested gain %.3f above ceiling %.3f: clamped, recorded as defect",
                 requested_gain, self.limits.max_gain,
             )
 

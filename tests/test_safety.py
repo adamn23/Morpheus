@@ -186,7 +186,7 @@ def _hostile_actions(draw):
     """Arbitrary hostile actions, ordered by timestamp.
 
     The sort matters. Without it Hypothesis happily emits an awakening at t=0
-    *after* a cue at t=7200, which no real clock can produce — monotonic time
+    *after* a cue at t=7200, which no real clock can produce: monotonic time
     only moves forward. Testing against impossible histories produces failures
     that teach nothing.
     """
@@ -287,7 +287,7 @@ class TestNightBudgetSurvivesRearm:
     """A WBTB wake re-arms the supervisor mid-night.
 
     Before `begin_night` was separated from `arm`, re-arming cleared
-    `_cue_times` — which backs both the nightly cap and the rolling-hour cap —
+    `_cue_times` (which backs both the nightly cap and the rolling-hour cap)
     so a six-cue budget could deliver twelve, and a night halted on a possible
     awakening could be silently revived. The whole-night budget and the terminal
     stops must outlive the re-arm; only the delay clock and cooldown restart.

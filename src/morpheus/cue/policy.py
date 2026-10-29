@@ -1,7 +1,7 @@
 """Cue policy: when to propose a cue, and how loud.
 
 M2 ships a transparent heuristic and nothing else. That is a deliberate choice
-rather than a placeholder (design.md §12.5): with zero nights of data, any
+rather than a placeholder: with zero nights of data, any
 learner would be fitting noise, and a hand-written rule gives the adaptive layer
 in M5 a legible baseline it has to beat.
 

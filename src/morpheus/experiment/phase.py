@@ -2,12 +2,12 @@
 
 Two phases, deliberately separated, because they want opposite things.
 
-**Phase A — MAX LD.** No randomisation. Run the strongest protocol available
+**Phase A: MAX LD.** No randomisation. Run the strongest protocol available
 every night and tune it: gain, WBTB timing, induction script. Tuning is exactly
-what makes these nights useless for causal inference — the intervention changes
-under you — and that is fine, because inference is not what Phase A is for.
+what makes these nights useless for causal inference (the intervention changes
+under you) and that is fine, because inference is not what Phase A is for.
 
-**Phase B — VALIDATE.** Everything frozen except the cue condition, which the
+**Phase B: VALIDATE.** Everything frozen except the cue condition, which the
 blinded harness randomises. This is the only phase that can estimate a causal
 cue effect.
 
@@ -39,7 +39,7 @@ FROZEN_PARAMETERS = (
 )
 
 #: Nights of Phase A required before Phase B may begin. Not a statistical
-#: threshold — it is the minimum needed to have titrated gain at all, given the
+#: threshold: it is the minimum needed to have titrated gain at all, given the
 #: search moves at most one step per two nights.
 MIN_PHASE_A_NIGHTS = 14
 
@@ -174,7 +174,7 @@ def drift(conn: sqlite3.Connection, observed: dict) -> list[str]:
 
     Reported rather than blocked. A night that deviates is still a night; what
     matters is that the deviation is on the record instead of being discovered
-    — or not — during analysis months later.
+    (or not) during analysis months later.
     """
     state = current(conn)
     if not state.is_validating:

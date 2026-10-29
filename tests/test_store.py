@@ -72,7 +72,7 @@ def test_config_snapshot_is_deduplicated(conn, config: MorpheusConfig) -> None:
 
 
 def test_changed_config_creates_a_new_snapshot(conn, config: MorpheusConfig) -> None:
-    """Provenance guarantee behind design.md §16.
+    """Config provenance guarantee.
 
     A threshold tweaked mid-study must be visible in analysis, not silently
     reinterpret every night recorded before it.

@@ -109,8 +109,8 @@ class TestSleepAssertionLeavesTheDisplayAlone:
 class TestInterruptFinalizesTheSession:
     """Ctrl-C is what the CLI tells the user to press to end a night.
 
-    Before this was wired, the default handler raised KeyboardInterrupt — a
-    BaseException, invisible to the runner's `except Exception` — and the run
+    Before this was wired, the default handler raised KeyboardInterrupt (a
+    BaseException, invisible to the runner's `except Exception`) and the run
     exited with the session row still at status='running', no end time, no
     summary and no defect flag. The night vanished silently, which is the exact
     failure this module exists to make impossible. Only a subprocess can test

@@ -93,7 +93,7 @@ class ExperimentStore:
         if not row["preregistration"]:
             raise ValueError(
                 "cannot start an experiment without a pre-registration. "
-                "Run `morpheus prereg` first — deciding the analysis after seeing "
+                "Run `morpheus prereg` first: deciding the analysis after seeing "
                 "the data is the failure mode the whole harness exists to prevent."
             )
         self._conn.execute(
@@ -169,7 +169,7 @@ class ExperimentStore:
         """Unseal for the daemon, without marking the night as revealed.
 
         The cue engine must know whether to play audio. That read is legitimate
-        and is not an unblinding, because nothing is shown to the user — so it
+        and is not an unblinding, because nothing is shown to the user, so it
         is audited as machine-read rather than counted against the blind.
         """
         row = self._require(assignment_id)
@@ -194,7 +194,7 @@ class ExperimentStore:
             )
             raise BlindingError(
                 f"no morning report for {row['assigned_date']}. The arm stays sealed until "
-                f"the report is submitted — knowing the condition first contaminates the "
+                f"the report is submitted: knowing the condition first contaminates the "
                 f"primary outcome. Run `morpheus journal` first."
             )
 
@@ -211,7 +211,7 @@ class ExperimentStore:
         )
         if not report_exists:
             log.warning(
-                "assignment %s was force-revealed before its report — this night is "
+                "assignment %s was force-revealed before its report: this night is "
                 "unblinded and should be excluded from the primary analysis",
                 assignment_id,
             )
@@ -226,7 +226,7 @@ class ExperimentStore:
     def revealed_arms(self, experiment_id: int) -> list[tuple[str, Arm]]:
         """Dates and arms for nights that have been legitimately revealed.
 
-        This is the analysis input. Unrevealed nights are absent by design — the
+        This is the analysis input. Unrevealed nights are absent by design: the
         analysis cannot see an arm the participant has not yet earned the right
         to see, which stops a mid-study peek disguised as "just running numbers".
         """

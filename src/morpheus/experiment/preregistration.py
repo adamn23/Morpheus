@@ -2,7 +2,7 @@
 
 A pre-registration is a commitment made before seeing data: what will be
 measured, how it will be analysed, and what would count as a negative result.
-Its value comes entirely from being fixed in advance — an analysis plan written
+Its value comes entirely from being fixed in advance: an analysis plan written
 afterwards is a description of what happened to work.
 
 That is a sharper problem here than in a group study. The participant, the
@@ -19,7 +19,7 @@ from datetime import date
 from ..report.schema import PRIMARY_OUTCOME_DEFINITION
 from .randomization import Arm, RandomizationPlan, required_nights_per_arm
 
-TEMPLATE = """# Pre-registration — {name}
+TEMPLATE = """# Pre-registration: {name}
 
 Generated {today}. Plan fingerprint `{fingerprint}`.
 
@@ -53,7 +53,7 @@ would measure nothing.
 Known limitation: with block randomization the final entry in a block is
 determined by the preceding ones. A participant who tracks assignments can
 sometimes infer it. This is why `guessed_condition` is collected on every
-report — unblinding is measured rather than assumed away.
+report: unblinding is measured rather than assumed away.
 
 ## Primary outcome
 
@@ -158,7 +158,7 @@ def generate(
         total = needed * len(plan.arms)
         power_note = (
             f"A normal-approximation calculation gives roughly **{needed} nights per arm** "
-            f"for 80% power at alpha 0.05 — about **{total} nights total**, or "
+            f"for 80% power at alpha 0.05: about **{total} nights total**, or "
             f"**{total / 30.0:.0f} months** of nightly compliance. The approximation is "
             f"optimistic at these rates, so treat it as a floor."
         )

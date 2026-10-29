@@ -1,13 +1,13 @@
 """Loading reference sleep staging from an external device.
 
 The reference is what turns "the camera sees something" into a claim that can be
-checked. Without it, any eye-movement detector is unfalsifiable — which is why
+checked. Without it, any eye-movement detector is unfalsifiable, which is why
 G9 (eye-movement-timed cueing) is hard-locked behind a passing validation record
 and why this module exists before that one.
 
 Supports hypnogram CSVs, which is the common denominator across devices: Muse
 via MindMonitor, ZMax, YASA output, and hand-scored files all export or convert
-to (timestamp, stage). EDF is deliberately not parsed here — it would pull in a
+to (timestamp, stage). EDF is deliberately not parsed here: it would pull in a
 heavy dependency to handle a format every one of those tools can already export
 out of.
 
@@ -62,7 +62,7 @@ class ReferenceEpoch:
 
         Named for what it is: an external instrument's measurement, which
         Morpheus is entitled to record but not to make. The verbosity is the
-        point — it stays distinguishable from anything Morpheus concluded, and
+        point: it stays distinguishable from anything Morpheus concluded, and
         it does not need an exemption from the naming lint.
         """
         return self.stage == "R"
@@ -126,7 +126,7 @@ def load_hypnogram_csv(
     """Read a hypnogram CSV into epochs.
 
     Accepts either an explicit timestamp column or a bare stage column, in which
-    case epochs are assumed contiguous from `start_utc` — the shape YASA and
+    case epochs are assumed contiguous from `start_utc`: the shape YASA and
     several scoring tools produce.
     """
     path = Path(path)
@@ -140,7 +140,7 @@ def load_hypnogram_csv(
 
     header, data = rows[0], rows[1:]
     time_col = _find_column(header, ("timestamp", "time", "onset", "start", "datetime", "epoch"))
-    # naming-lint: allow — these are column names in other tools' exports.
+    # naming-lint: allow (these are column names in other tools' exports).
     stage_col = _find_column(
         header, ("stage", "sleep_stage", "label", "hypnogram", "score")  # naming-lint: allow
     )

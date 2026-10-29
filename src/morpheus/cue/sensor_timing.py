@@ -5,7 +5,7 @@ to produce a wrong answer, so it is built to refuse to run.
 
 `SensorTimingAuthorization` reads `validation_results` and reports whether H1 has
 passed. `CueController` will not accept a sensor-timing configuration without a
-passing record — it raises at construction, before a night starts, rather than
+passing record: it raises at construction, before a night starts, rather than
 degrading quietly at 04:00. There is no flag to override it. Adding one would
 defeat the purpose, since the person who would use it is the person the lock
 protects.
@@ -14,7 +14,7 @@ The reasoning: an eye-movement index that has not been checked against a
 reference is an unvalidated number. Letting it decide when to make a noise at a
 sleeping person would produce cue timings that feel principled and are not, and
 the resulting data would look like evidence about cue timing while actually
-being evidence about nothing (design.md §8, §22).
+being evidence about nothing.
 
 The HMM here exists because per-second estimates are far noisier than the thing
 they estimate. Sleep states persist for tens of minutes, so a two-state model
@@ -98,8 +98,8 @@ class StickyTwoStateHMM:
     """Two-state Gaussian HMM with a fixed, sticky transition matrix.
 
     Not fitted end-to-end. The transition probability encodes a fact already
-    known — sleep states last tens of minutes, so second-to-second switching is
-    implausible — and fixing it avoids burning scarce data on re-learning it.
+    known (sleep states last tens of minutes, so second-to-second switching is
+    implausible) and fixing it avoids burning scarce data on re-learning it.
     Emissions are Gaussian, fitted per night by splitting at the median, which is
     crude but self-calibrating across setups where absolute levels differ.
 

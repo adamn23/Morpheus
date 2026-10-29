@@ -7,7 +7,7 @@ this wrong makes a working detector look broken.
 
 The offset is estimated by cross-correlating gross body motion against the
 reference's wake epochs. Wake is when people move, and it is the one state both
-instruments observe through completely different physics — which is exactly what
+instruments observe through completely different physics, which is exactly what
 makes it a usable synchronisation marker.
 
 The estimate is reported with a confidence figure rather than applied silently.
@@ -138,7 +138,7 @@ def build_dataset(
 
     Wake epochs are excluded by default. The question is whether the index
     separates REM from *other sleep*, and leaving wake in would inflate the AUC
-    on the easiest possible contrast — a moving, sometimes-visible awake face
+    on the easiest possible contrast: a moving, sometimes-visible awake face
     against a still sleeping one. That would be a real effect and an irrelevant
     one.
     """
@@ -195,7 +195,7 @@ def build_dataset(
 
     matrix = np.vstack(rows)
 
-    # Drop feature columns that are entirely missing — in M0/M1 the eye-flow
+    # Drop feature columns that are entirely missing: in M0/M1 the eye-flow
     # columns are NULL by design, and passing all-NaN columns to the classifier
     # would fail rather than degrade.
     keep = [i for i in range(matrix.shape[1]) if np.isfinite(matrix[:, i]).any()]

@@ -15,7 +15,7 @@ Spontaneous movement during sleep is common, so the false-positive rate on
 measurable: the design's M2 acceptance criterion tracks cue-attributed
 awakenings, and comparing the post-cue motion rate against the baseline rate
 during non-cue windows is what separates real cue effects from ordinary
-restlessness (design.md §22, §23).
+restlessness.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def classify_post_cue(
     if len(after) < th.min_frames or quality < th.min_quality:
         # Do not learn from a window we could not see. An `uncertain` outcome
         # leaves the adaptive layer untouched, which is the correct response to
-        # missing information (design.md §12.4).
+        # missing information.
         return OutcomeAssessment(
             outcome=Outcome.UNCERTAIN,
             motion_before=_mean(f.global_motion for f in before),

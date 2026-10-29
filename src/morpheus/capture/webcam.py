@@ -76,7 +76,7 @@ class WebcamSource(FrameSource):
         On macOS the first access to a camera triggers a TCC consent dialog.
         AVFoundation raises that dialog *asynchronously* and fails the open
         immediately, so a single-attempt open always fails the first time a
-        binary is used — even when permission is subsequently granted. The
+        binary is used, even when permission is subsequently granted. The
         second run then succeeds, because consent is already recorded.
 
         Retrying across a short window absorbs that, and also covers a USB
@@ -99,7 +99,7 @@ class WebcamSource(FrameSource):
             if attempt < attempts:
                 if attempt == 1:
                     log.info(
-                        "camera not available yet — if macOS is showing a permission "
+                        "camera not available yet: if macOS is showing a permission "
                         "dialog, click Allow. Retrying for up to %.0f s.",
                         (attempts - 1) * cfg.open_retry_delay_s,
                     )
@@ -181,7 +181,7 @@ class WebcamSource(FrameSource):
             raise FrameSourceError("read() before open()")
         ok, image = self._cap.read()
         # Timestamp immediately after the read returns. This is still not the
-        # true exposure instant — there is unmeasured driver latency — but it is
+        # true exposure instant (there is unmeasured driver latency) but it is
         # consistently biased, which is what interval arithmetic needs.
         t_mono, t_utc = time.monotonic(), time.time()
         if not ok or image is None:

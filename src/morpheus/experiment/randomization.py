@@ -4,7 +4,7 @@ Two properties matter more here than they would in a group study.
 
 **Reproducibility.** The entire assignment sequence is a pure function of
 (seed, design). It is never stored as the source of truth and never drawn
-incrementally from a mutable RNG — regenerate it from the seed and you get the
+incrementally from a mutable RNG: regenerate it from the seed and you get the
 same nights, forever. That is what makes the analysis auditable by someone who
 was not present, including yourself in six months.
 
@@ -13,7 +13,7 @@ produces runs like AAAA that waste weeks. Block randomization guarantees each
 arm appears equally often within every block, so a study stopped early is still
 roughly balanced. The cost is predictability: the last entry in a block is
 determined by the preceding ones, so a participant who is counting can infer it.
-Since the participant here is also the developer, that is a real leak — it is
+Since the participant here is also the developer, that is a real leak: it is
 measured via the `guessed_condition` report field rather than waved away, and
 block size is configurable so it can be traded off.
 """
@@ -28,7 +28,7 @@ from typing import Optional, Sequence
 
 
 class Arm(str, Enum):
-    """Experimental conditions (design.md §15.1).
+    """Experimental conditions.
 
     Training happens on every night including NO_CUE. Otherwise the arms differ
     in two variables at once and the design measures nothing.
@@ -52,8 +52,8 @@ DESIGN_THREE_ARM: tuple[Arm, ...] = (Arm.TRAINED_CUE, Arm.UNTRAINED_CUE, Arm.NO_
 # Trained cue against its acoustically matched untrained twin: same timing,
 # duration, gain, ramp and count, differing only in whether the sound was
 # conditioned before sleep. This is the sharper contrast, because a no-cue arm
-# varies two things at once — whether a sound occurred *and* whether it was
-# conditioned — and does not hold arousal cost constant either.
+# varies two things at once (whether a sound occurred *and* whether it was
+# conditioned) and does not hold arousal cost constant either.
 #
 # The cost is real and should be understood before choosing it: the
 # trained-versus-untrained effect is smaller than trained-versus-silence, so it
@@ -81,7 +81,7 @@ class RandomizationPlan:
     """A reproducible assignment sequence.
 
     `seed` is stored in the experiments table. Given it and the design, the
-    whole sequence regenerates exactly — so the plan is derived, not persisted
+    whole sequence regenerates exactly, so the plan is derived, not persisted
     as truth, and cannot silently drift from what was pre-registered.
     """
 
@@ -175,10 +175,10 @@ def required_nights_per_arm(
     """Rough nights-per-arm for a two-proportion comparison.
 
     A normal approximation, which is optimistic at these rates and sample
-    sizes — treat it as a floor rather than an estimate. It exists to make the
+    sizes: treat it as a floor rather than an estimate. It exists to make the
     calendar cost visible before committing: at a 10% baseline and a 25% target
     it returns a number in the low hundreds, which is the single most important
-    fact about this study design (design.md §15.4).
+    fact about this study design.
     """
     from math import sqrt
 

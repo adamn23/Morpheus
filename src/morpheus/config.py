@@ -1,7 +1,7 @@
 """Typed configuration, and the snapshotting that makes analysis honest.
 
-Every persisted artifact references the `config_snapshots` row that produced it
-(design.md §16). Without that, a threshold tweaked in week three silently
+Every persisted artifact references the `config_snapshots` row that produced it.
+Without that, a threshold tweaked in week three silently
 reinterprets the first two weeks of data, and nobody notices until the analysis
 disagrees with itself.
 """
@@ -73,7 +73,7 @@ class QualityConfig(BaseModel):
     max_underexposed_fraction: float = 0.85
     # Variance of the Laplacian, measured AFTER a 3x3 Gaussian blur (see
     # vision/quality.py). The blur suppresses sensor noise, which would
-    # otherwise make a dark high-gain IR frame score as well focused — but it
+    # otherwise make a dark high-gain IR frame score as well focused, but it
     # also divides the scale by roughly 20x, so this floor is not comparable to
     # an unblurred Laplacian variance and must not be reasoned about as one.
     #
@@ -84,7 +84,7 @@ class QualityConfig(BaseModel):
     #
     # This is still a population default and absolute Laplacian variance does
     # not port across cameras or lighting. The sleep-baseline calibration
-    # (design.md §13.2) is what eventually sets it from the user's own
+    # is what eventually sets it from the user's own
     # overnight quantiles; `morpheus doctor --write-config` is the interim.
     min_focus: float = 2.0
     scene_change_threshold: float = 0.35  # above => treat as camera moved
@@ -92,7 +92,7 @@ class QualityConfig(BaseModel):
 
 
 class PresenceConfig(BaseModel):
-    """Face detection. Runs at `detect_hz`, not per frame (design.md §10)."""
+    """Face detection. Runs at `detect_hz`, not per frame."""
 
     model_path: Path = DEFAULT_MODEL_DIR / YUNET_FILENAME
     score_threshold: float = 0.6
@@ -117,7 +117,7 @@ class MotionConfig(BaseModel):
 
 
 class CoverageConfig(BaseModel):
-    """Definition of "eye region usable" — the M0 decision gate.
+    """Definition of "eye region usable": the M0 decision gate.
 
     These numbers determine the single output that decides the project's shape,
     so they are declared up front rather than tuned after seeing the answer.
@@ -141,7 +141,7 @@ class EyeTrackingConfig(BaseModel):
     `enabled` defaults to True because computing and logging the index costs a
     little CPU and buys the data H1 needs. It does not default to *influencing*
     anything: G9 is locked behind a passing validation regardless of this flag
-    (design.md §8), so turning this on records the signal without acting on it.
+   , so turning this on records the signal without acting on it.
     """
 
     enabled: bool = True
@@ -219,7 +219,7 @@ def git_is_dirty(repo: Optional[Path] = None) -> Optional[bool]:
     """Whether the working tree has uncommitted changes.
 
     M0 only records this. From M2 the daemon refuses to arm a cueing night on a
-    dirty tree (design.md §21), because a night whose code cannot be recovered
+    dirty tree, because a night whose code cannot be recovered
     is a night that cannot be analysed.
     """
     try:

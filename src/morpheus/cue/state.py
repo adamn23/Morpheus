@@ -8,7 +8,7 @@ from typing import Optional
 
 
 class CueState(str, enum.Enum):
-    """States of the overnight cue loop (design.md §12.1).
+    """States of the overnight cue loop.
 
     `HALTED` is absorbing. Nothing re-enters the loop from it, which is what
     makes "stop cueing for the night" mean what it says.
@@ -27,7 +27,7 @@ class CueState(str, enum.Enum):
 
 
 class Gate(str, enum.Enum):
-    """The gate stack. All must pass for a cue to be proposed (design.md §12.2).
+    """The gate stack. All must pass for a cue to be proposed.
 
     G9 is absent by design. Eye-movement activity may not influence cue timing
     until it has cleared the M3 validation gate; until then it is computed,
@@ -96,7 +96,7 @@ class CueCommand:
 
 
 class Outcome(str, enum.Enum):
-    """Post-cue response classification (design.md §12.4)."""
+    """Post-cue response classification."""
 
     QUIET = "quiet"
     PROBABLE_AROUSAL = "probable_arousal"

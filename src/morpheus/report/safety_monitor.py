@@ -1,12 +1,11 @@
 """Sleep-quality monitoring and the automatic stopping rule.
 
-Design.md §23 failure condition 5 and §24 both commit to this: if sleep quality
-declines for seven consecutive nights, the study halts. The generated
-pre-registration states it as a stopping rule to any reader.
+If sleep quality declines for seven consecutive nights, the study halts. The
+generated pre-registration states it as a stopping rule to any reader.
 
 It was missing until an audit caught it, which made the pre-registration a
 document that promised a safety behaviour the code did not implement. That is
-worse than not having the rule at all — a stated guarantee nobody checks is how
+worse than not having the rule at all: a stated guarantee nobody checks is how
 a participant ends up trusting a protection that was never there.
 
 The rule is enforced before a night arms rather than during it. Stopping a study
@@ -20,7 +19,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-# Design.md §23. Pre-committed; not tuned against observed data.
+# Pre-committed; not tuned against observed data.
 DECLINE_NIGHTS = 7
 MIN_HISTORY = 10
 
@@ -95,7 +94,7 @@ def check(conn: sqlite3.Connection, *, window: int = 30) -> SleepQualityCheck:
         reason = (
             f"sleep quality has not improved for {declines} consecutive nights "
             f"(recent mean {recent_mean:.1f} vs baseline {baseline_mean:.1f}). "
-            f"Per design.md §23, cueing stops until it recovers."
+            f"Cueing stops until it recovers."
         )
 
     return SleepQualityCheck(
@@ -121,7 +120,7 @@ def format_check(result: SleepQualityCheck) -> str:
     lines.append(f"  consecutive declines  {result.consecutive_declines} of {DECLINE_NIGHTS}")
     if result.should_halt:
         lines.append("")
-        lines.append("  HALT — " + result.reason)
+        lines.append("  HALT: " + result.reason)
     elif result.warning:
         lines.append("")
         lines.append(

@@ -332,9 +332,7 @@ def test_sensor_noise_does_not_masquerade_as_flow() -> None:
     of 0.2466 on a still face, against 0.0004 for a static synthetic scene, and
     it buried a genuine saccade sitting 1.6x above it.
 
-    Measuring |mean(v)| makes incoherent noise cancel. See
-    docs/m1-instrument-defect.md for the full write-up and the pre-committed
-    re-test criteria.
+    Measuring |mean(v)| makes incoherent noise cancel.
     """
     for sigma in (2.0, 4.0):
         floor = _noise_floor(sigma)
@@ -389,7 +387,7 @@ def test_coherence_separates_signal_from_noise() -> None:
     """The ratio is what makes a noise-dominated night identifiable afterwards.
 
     Measured as a median over a run of frames, matching how the calibration
-    criterion uses it. A single frame pair is far too noisy to threshold on —
+    criterion uses it. A single frame pair is far too noisy to threshold on:
     an early version of this test asserted on one pair and saw 0.379 against a
     20-frame median of 0.235 for the same condition.
     """

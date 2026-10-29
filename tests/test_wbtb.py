@@ -1,7 +1,7 @@
 """WBTB support: the induction script, the alarm, and the counts it needs.
 
-The safety half of WBTB — that a mid-night re-arm cannot restart the nightly
-cue budget — lives in `test_safety.py`, next to the supervisor it constrains.
+The safety half of WBTB (that a mid-night re-arm cannot restart the nightly
+cue budget) lives in `test_safety.py`, next to the supervisor it constrains.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ class TestWakeAlarmIsNotACue:
 
     def test_alarm_is_acoustically_unlike_every_cue(self):
         """If the alarm resembled the cue it would counter-condition it to mean
-        'get up' — the one failure the protocol cannot absorb."""
+        'get up': the one failure the protocol cannot absorb."""
         alarm = PRESETS["wbtb-alarm"]
         for name, notes in PRESETS.items():
             if name in WAKE_ONLY_PRESETS:

@@ -33,7 +33,7 @@ class CueStore:
 
         If the process dies during playback, the record still exists with
         played=0, so the night's analysis can distinguish "we tried and
-        something broke" from "no cue was attempted" (design.md §12.3).
+        something broke" from "no cue was attempted".
         """
         cur = self._conn.execute(
             """
@@ -84,7 +84,7 @@ class CueStore:
         features: Optional[dict] = None,
         detector_version: Optional[str] = None,
     ) -> None:
-        # EventKind is a closed enum (design.md §11); accepting a bare string
+        # EventKind is a closed enum; accepting a bare string
         # here would route around the naming discipline the whole project rests on.
         if not isinstance(kind, EventKind):
             raise TypeError(f"kind must be an EventKind, got {type(kind).__name__}")

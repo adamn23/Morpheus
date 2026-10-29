@@ -1,16 +1,16 @@
 """Thompson sampling over a small set of pre-declared cue arms.
 
 Why a bandit and not something larger: the lifetime decision count of this
-system is roughly a few cues a night for a few hundred nights — order 1,000
+system is roughly a few cues a night for a few hundred nights: order 1,000
 pulls. Deep RL needs four orders of magnitude more. Beta-Bernoulli Thompson
 sampling is near-optimal at this scale, needs no tuning, survives restarts as
 two numbers per arm, and can explain any decision it makes as "this arm's
-posterior sampled highest tonight" (design.md §12.5).
+posterior sampled highest tonight".
 
 The arm space is deliberately tiny and fully enumerated in advance: three gains
 crossed with three delays. Every arm is constructed *inside* the safety limits,
 and the supervisor still adjudicates every cue afterwards. The learner therefore
-cannot reach an unsafe action even in principle — not because it is well
+cannot reach an unsafe action even in principle, not because it is well
 behaved, but because no such action exists in its action set.
 
 Reward is deliberately not "was the cue heard". It is a composite that penalises
@@ -78,7 +78,7 @@ def reward_for(outcome: Outcome, *, cue_heard: Optional[bool] = None,
 
     Ordering, best to worst: a lucid night, then a quiet cue that was noticed,
     then a quiet cue, then an arousal, then an awakening. Waking the sleeper
-    scores zero rather than merely low — the bandit should never trade sleep for
+    scores zero rather than merely low: the bandit should never trade sleep for
     salience, and the cheapest way to guarantee that is to make it worthless.
 
     `uncertain` returns None. Learning from a window whose signal collapsed
@@ -260,7 +260,7 @@ def log_counterfactual(
 
 def format_ranking(policy: ThompsonPolicy) -> str:
     lines = [
-        f"Adaptive policy — {policy.version}",
+        f"Adaptive policy: {policy.version}",
         "=" * 60,
     ]
     if policy.cold:

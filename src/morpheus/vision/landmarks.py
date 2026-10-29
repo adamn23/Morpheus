@@ -1,7 +1,7 @@
 """Facial landmarks, behind an interface that tolerates their absence.
 
 The design calls for MediaPipe wrapped so it can be swapped or bypassed, with
-the motion pipeline working at zero landmarks (design.md §8). That is not
+the motion pipeline working at zero landmarks. That is not
 defensive coding for its own sake: landmark detection is expected to fail on
 closed eyes, IR monochrome, and the heavy head roll of a side sleeper, which is
 most of the night this system exists to observe.
@@ -9,11 +9,11 @@ most of the night this system exists to observe.
 So there are two providers. MediaPipe gives 478 points and real eyelid contours
 when it works. YuNet gives five points and always works, because it is already
 required for M0 presence detection. The pipeline degrades from one to the other
-to nothing, and records which it had — `landmark_availability` is itself a
+to nothing, and records which it had: `landmark_availability` is itself a
 feature, not an error condition.
 
 MediaPipe runs in VIDEO mode rather than IMAGE mode. It tracks between frames
-instead of re-detecting each time, which is both faster and steadier — and
+instead of re-detecting each time, which is both faster and steadier: and
 steadiness matters more than raw accuracy here, since the signal of interest is
 a sub-pixel change measured across consecutive frames.
 """
@@ -122,7 +122,7 @@ class MediaPipeLandmarks:
 
         Construction is deliberately cheap. The 3.7 MB model takes a second or
         two to load, and VisionPipeline is constructed in plenty of places that
-        never see a frame — every test that checks aggregation arithmetic, for
+        never see a frame: every test that checks aggregation arithmetic, for
         one. Paying that cost eagerly turned the suite from 19 seconds into
         minutes before this was made lazy.
         """
@@ -328,7 +328,7 @@ def eye_aspect_ratio(landmarks: LandmarkSet, *, left: bool) -> Optional[float]:
     """Vertical opening over horizontal width for one eye.
 
     Near zero with the lid closed, which is the normal state all night. Its
-    *variation* while closed is the interesting part — that is lid surface
+    *variation* while closed is the interesting part: that is lid surface
     movement, the only thing a silicon sensor can see of an eye behind a lid.
     """
     if not landmarks.dense:

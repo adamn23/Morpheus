@@ -4,10 +4,10 @@ The trained/untrained distinction is the entire basis of the experiment's
 control arm, so it cannot rest on a filename or an operator's memory. Every
 asset is hashed on registration, and the hash is recorded with each cue that is
 played. Whether a given night used the conditioned cue is therefore a fact
-recoverable from the database, not an assertion (design.md §15.1).
+recoverable from the database, not an assertion.
 
 The synthesised cues exist so that a matched untrained control can be generated
-with the same spectral character as the trained cue but a different melody —
+with the same spectral character as the trained cue but a different melody,
 which is what makes the B arm a real control rather than just "some other noise".
 """
 
@@ -85,9 +85,9 @@ PRESETS: dict[str, list[float]] = {
     "control-fourth": [880.00, 587.33, 880.00],      # A5 D5 A5
 
     # The WBTB wake alarm. Its job is the opposite of every cue above: those are
-    # engineered not to wake you, this one has to. Deliberately unlike them —
-    # higher register, twice the length, an insistent alternation instead of a
-    # three-note contour — because a wake alarm that resembles the cue would
+    # engineered not to wake you, this one has to. Deliberately unlike them
+    # (higher register, twice the length, an insistent alternation instead of a
+    # three-note contour) because a wake alarm that resembles the cue would
     # teach you that the cue means "get up", undoing the conditioning the whole
     # protocol rests on. Never register this as a trained asset.
     "wbtb-alarm": [880.00, 1174.66] * 4,             # A5 D6, four times
@@ -102,14 +102,14 @@ WAKE_ONLY_PRESETS = frozenset({"wbtb-alarm"})
 #: This pairing is what makes the control arm a control. The untrained cue is
 #: delivered at identical timing, duration, gain, ramp and count; the only thing
 #: that differs is that it was never paired with the pre-sleep conditioning. A
-#: silence arm cannot do that — it changes both whether a sound occurred and
+#: silence arm cannot do that: it changes both whether a sound occurred and
 #: whether it was conditioned, and it does not hold arousal cost constant.
 #:
 #: `trained-ascending` / `control-descending` is the pair to use: the two are
 #: the *same three tones in reverse order*, so spectral content and total energy
 #: are identical by construction. `trained-fifth` / `control-fourth` share a
-#: frequency set but not a multiset — one repeats the low note, the other the
-#: high — so they are matched more loosely. Prefer the first pair.
+#: frequency set but not a multiset (one repeats the low note, the other the
+#: high) so they are matched more loosely. Prefer the first pair.
 MATCHED_CONTROL: dict[str, str] = {
     "trained-ascending": "control-descending",
     "trained-fifth": "control-fourth",

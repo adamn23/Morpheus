@@ -153,7 +153,7 @@ def gray_frame(
     `textured` is on by default and matters more than it looks: a perfectly
     flat field has no high-frequency content, so the focus metric correctly
     scores it as unusable and the quality gate rejects the frame before
-    anything else runs. Real scenes have edges — bedding, a headboard, a face —
+    anything else runs. Real scenes have edges (bedding, a headboard, a face)
     so tests that want to exercise the downstream pipeline need some structure
     here, or they end up asserting against `QUALITY_TOO_LOW` by accident.
     """

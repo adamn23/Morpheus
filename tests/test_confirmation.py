@@ -2,7 +2,7 @@
 
 These tests exist to prove the criteria behave correctly BEFORE the
 confirmation data is recorded. Once that recording exists, neither the criteria
-nor these tests may change — that is the whole point of freezing them.
+nor these tests may change: that is the whole point of freezing them.
 
 The direction that matters most is rejection: the 0.909 that prompted this was
 post-hoc, and the most likely explanation is still that it was an artefact. The
@@ -125,7 +125,7 @@ def test_l2_catches_small_head_movement_masquerading_as_eye_movement() -> None:
     """The confound the original protocol never tested.
 
     Large head turns are removed by the motion gate. Small, sleep-like ones are
-    not — and if they produce the same lid displacement as a saccade, the
+    not, and if they produce the same lid displacement as a saccade, the
     channel is measuring the head inside the quiet condition too.
     """
     data = dataset(saccade_level=3.0, micro_level=3.5, micro_motion=QUIET)

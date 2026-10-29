@@ -4,7 +4,7 @@ A journal kept in prose rather than with tags imports with `lucid_binary` unset,
 which leaves the baseline rate unmeasurable. This walks the unscored entries so
 they can be coded against the pinned outcome definition.
 
-**The regex suggests; the human decides.** Prose is genuinely ambiguous — "I
+**The regex suggests; the human decides.** Prose is genuinely ambiguous: "I
 dreamt I was flying and knew it was impossible" may or may not have involved
 awareness of dreaming, and only the person who had the dream can say. Automatic
 classification would fabricate the project's primary outcome, so the phrase
@@ -32,7 +32,7 @@ SUGGESTIVE = [
     # This journal abbreviates lucid dream to "ld", but uses it three ways, so
     # the label matters more than the match. "Had an ld", "2nd Ld?" and "Ld #5?"
     # are claims. "Ld: location, people" is a dream-sign note about what could
-    # have been noticed and is NOT a claim — auto-scoring those would inflate the
+    # have been noticed and is NOT a claim: auto-scoring those would inflate the
     # baseline. Bare mentions are often explicitly negative ("related to LD, but
     # probably not"). Word boundaries keep old/world/could/held from matching.
     (re.compile(

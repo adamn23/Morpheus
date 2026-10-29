@@ -43,7 +43,7 @@ def test_presets_are_matched_pairs() -> None:
 
     If the control were a different *kind* of sound, arm B would be a confound
     for "an unfamiliar noise occurred" rather than a control for "a sound
-    occurred" (design.md §15.1).
+    occurred".
     """
     trained = generate_preset("trained-ascending")
     control = generate_preset("control-descending")
@@ -307,9 +307,9 @@ def test_stopping_rule_needs_history_before_judging(conn) -> None:
 
 
 def test_stopping_rule_fires_on_a_sustained_decline(conn) -> None:
-    """Design.md §23 rule 5, which the pre-registration promises to any reader.
+    """The sleep-quality stopping rule, which the pre-registration promises.
 
-    It was missing until an audit caught it — the document committed to a
+    It was missing until an audit caught it: the document committed to a
     safety behaviour the code did not implement, which is worse than not having
     the rule, because a stated guarantee nobody checks is one a participant
     trusts for nothing.

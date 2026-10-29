@@ -1,10 +1,10 @@
 """Mining recurring motifs from dream narratives.
 
-Personal dream signs are the recurring features of someone's dreams — a place,
+Personal dream signs are the recurring features of someone's dreams: a place,
 a person, a situation that keeps reappearing. The conditioning protocol has a
 step for visualising them, and a generic prompt there is much weaker than one
 naming the things that actually recur in your dreams. Whether this improves
-lucidity is speculative (design.md §4.3, H5); that it improves the prompt over
+lucidity is speculative; that it improves the prompt over
 "think of something" is not.
 
 The method is deliberately crude: frequency counting over stopword-filtered
@@ -55,7 +55,7 @@ STOPWORDS: frozenset[str] = frozenset(
 )
 # "lucid" earns its place in that list for a specific reason: the lucidity tag
 # lives in the narrative text, so without filtering it ranks as one of the most
-# recurring "motifs" in any journal that tags lucid nights — which is an
+# recurring "motifs" in any journal that tags lucid nights, which is an
 # artefact of the annotation, not a feature of the dreams.
 
 
@@ -166,6 +166,6 @@ def format_signs(signs: Sequence[DreamSign], total_nights: int) -> str:
         "",
         "These are frequency counts, not interpretation. Pick the ones you",
         "recognise as genuinely characteristic of your dreams and ignore the",
-        "rest — the list is a prompt for your judgement, not a result.",
+        "rest: the list is a prompt for your judgement, not a result.",
     ]
     return "\n".join(lines)

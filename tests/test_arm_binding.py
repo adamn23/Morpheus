@@ -32,7 +32,7 @@ def setup(tmp_path):
 
 class TestMatchedPairing:
     def test_the_pair_in_use_is_an_exact_multiset_match(self):
-        """Identical tones in reverse order — same spectral content, same total
+        """Identical tones in reverse order: same spectral content, same total
         energy. That equality is what makes the untrained arm a control for
         'a sound occurred' rather than a confound for 'a different sound'."""
         trained = PRESETS["trained-ascending"]

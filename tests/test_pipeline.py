@@ -50,7 +50,7 @@ def test_face_fraction_counts_fresh_detections_only(config: MorpheusConfig) -> N
     """Regression guard for a subtle and very plausible bug.
 
     Presence runs at 5 Hz while frames arrive at 30 Hz. If aggregation counted
-    every sample, a continuously visible face would report as ~17% present —
+    every sample, a continuously visible face would report as ~17% present:
     the detector's duty cycle rather than the face's. That would have silently
     understated the M0 decision-gate number by a factor of six.
     """
@@ -228,7 +228,7 @@ def test_realistic_scene_clears_the_quality_gate(config: MorpheusConfig) -> None
     )
     assert metrics.score >= config.quality.min_score, (
         f"a well-exposed textured scene scored {metrics.score:.3f}, below the "
-        f"{config.quality.min_score} gate — real footage would be silently discarded"
+        f"{config.quality.min_score} gate: real footage would be silently discarded"
     )
 
 

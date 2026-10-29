@@ -1,4 +1,4 @@
-"""The waking calibration protocol (design.md §13.1).
+"""The waking calibration protocol.
 
 The centre of this is one segment: **deliberate left-right eye movement with the
 eyes closed**, compared against **eyes closed and still**. That pair is the
@@ -65,7 +65,7 @@ class Segment:
     instruction: str
     seconds: int
     # Segments the analysis compares this one against. Effect sizes are always
-    # relative — absolute flow magnitudes mean nothing across cameras.
+    # relative: absolute flow magnitudes mean nothing across cameras.
     contrast_with: tuple[str, ...] = ()
 
 
@@ -77,7 +77,7 @@ PROTOCOL: tuple[Segment, ...] = (
         title="Eyes closed, completely still",
         instruction=(
             "Close your eyes and hold as still as you can. Breathe normally. Try not "
-            "to move your eyes behind the lids — this is the noise floor everything "
+            "to move your eyes behind the lids: this is the noise floor everything "
             "else is measured against, so it is the most important segment here."
         ),
         seconds=45,
@@ -90,7 +90,7 @@ PROTOCOL: tuple[Segment, ...] = (
         instruction=(
             "Keep your eyes closed and your head perfectly still. Move your eyes "
             "slowly left, then right, about once per second. Make them large, "
-            "deliberate movements — as far as is comfortable in each direction."
+            "deliberate movements: as far as is comfortable in each direction."
         ),
         seconds=45,
         contrast_with=("eyes_closed_still",),
@@ -101,7 +101,7 @@ PROTOCOL: tuple[Segment, ...] = (
         setup=SegmentSetup.DESK,
         title="Fast left-right eye movement, eyes closed",
         instruction=(
-            "Same again, but quickly — several movements per second. Head still. "
+            "Same again, but quickly: several movements per second. Head still. "
             "This is the closest available proxy for the bursts this system is "
             "eventually looking for."
         ),
@@ -141,7 +141,7 @@ PROTOCOL: tuple[Segment, ...] = (
         instruction=(
             "Eyes closed and still behind the lids. Slowly turn your head left, then "
             "right, then back to centre. This tests whether head movement leaks into "
-            "the eye signal — the single most likely way for this system to fool "
+            "the eye signal: the single most likely way for this system to fool "
             "itself."
         ),
         seconds=25,
@@ -153,7 +153,7 @@ PROTOCOL: tuple[Segment, ...] = (
         setup=SegmentSetup.DESK,
         title="Small head movements, eyes still",
         instruction=(
-            "Eyes closed and deliberately still behind the lids — do not move them "
+            "Eyes closed and deliberately still behind the lids: do not move them "
             "at all. Make small, slow head movements of the kind you would make "
             "settling on a pillow: shift a centimetre, tilt slightly, settle again. "
             "Nothing large. This is the confound that matters, because big head "
@@ -196,7 +196,7 @@ PROTOCOL: tuple[Segment, ...] = (
         title="Lie face down",
         instruction=(
             "Lie on your front, however you actually sleep. If your face ends up in "
-            "the pillow, leave it there — that is the real condition, and a bad "
+            "the pillow, leave it there: that is the real condition, and a bad "
             "number here is a finding rather than a mistake."
         ),
         seconds=25,

@@ -4,12 +4,12 @@ The output that matters is `positive_control_auc`: how well the eye-flow index
 separates deliberate closed-eye saccades from closed-eye stillness, in the same
 recording session, on the same face, under the same lighting.
 
-Design.md §22 fixes the M1 gate at **AUC >= 0.80 on this waking test**. That is a
+The M1 gate is fixed at **AUC >= 0.80 on this waking test**. That is a
 deliberately soft bar for a deliberately easy task. The subject is awake,
 cooperative, well-lit, frontal, close to the camera, holding their head still,
 and making the largest eye movements they can manage. Every one of those
 conditions is strictly better than what a sleeping subject offers. Missing 0.80
-here does not mean "needs tuning" — it means the signal is not there to be
+here does not mean "needs tuning": it means the signal is not there to be
 found, and the honest response is to stop.
 
 Statistics are robust throughout: median and MAD rather than mean and standard
@@ -29,7 +29,7 @@ import numpy as np
 
 from .protocol import SEGMENTS_BY_KEY, SegmentRole, posture_segments
 
-# Design.md §22, M1 row. Pre-committed; not tunable from the CLI.
+# Pre-committed; not tunable from the CLI.
 POSITIVE_CONTROL_AUC_PASS = 0.80
 MIN_SAMPLES_PER_SEGMENT = 30
 
@@ -232,7 +232,7 @@ def window_maxima(
     Taking the maximum within a one-second window restores it. At one saccade
     per second every positive window contains an event, so duty cycle at the
     window level is ~100%. On simulated data a 4-sigma signal moves from 0.516
-    frame-level to 0.962 windowed — same data, same signal, only the
+    frame-level to 0.962 windowed: same data, same signal, only the
     aggregation changed.
 
     Windows are cut on sample timestamps rather than counts, so a dropped frame
@@ -511,7 +511,7 @@ def format_profile(profile: CalibrationProfile) -> str:
     add(f"  V2 registration   head-turn AUC {turn} below saccade AUC  {_mark(v2)}")
     add("")
 
-    add("POSITIVE CONTROL — deliberate closed-eye saccades vs stillness")
+    add("POSITIVE CONTROL: deliberate closed-eye saccades vs stillness")
     add("=" * 70)
     add(f"  aggregation      {WINDOW_S:.0f}s window maxima, not per-frame")
     if profile.positive_control_auc is None:
@@ -540,14 +540,14 @@ def format_profile(profile: CalibrationProfile) -> str:
         add("  is not evidence either way. Fix the instrument, do not read the gate.")
     elif profile.verdict == "PASS":
         add("  Deliberate eye movements are detectable while awake. That is a")
-        add("  necessary condition for H1, not a sufficient one — the sleeping")
+        add("  necessary condition for H1, not a sufficient one: the sleeping")
         add("  case is harder in every respect, and still has to be validated")
         add("  against a reference before it may influence a single cue.")
     elif profile.verdict == "FAIL":
         add("  Large deliberate eye movements are NOT detectable under the easiest")
         add("  conditions this system will ever see: awake, still, frontal, well lit,")
         add("  close to the camera. A sleeping face at an unknown angle in the dark")
-        add("  will not do better. Per design.md §23, the eye-movement branch ends")
+        add("  will not do better. The eye-movement branch ends")
         add("  here. Keep the camera as a motion guard and run the scheduled arm.")
         add("")
         add("  Do not tune thresholds and re-run until this passes. The threshold is")

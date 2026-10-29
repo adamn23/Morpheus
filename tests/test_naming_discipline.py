@@ -1,11 +1,11 @@
-"""Enforces the labelling rules from design.md §11.
+"""Enforces the labelling rules.
 
 Morpheus does not measure sleep stages and cannot confirm REM. That constraint
 is easy to hold in a design document and easy to lose in code, where a variable
 called `is_rem` costs nothing to type and quietly converts a hedge into a claim.
 
 This test is the enforcement mechanism. It is not pedantry: the naming is what
-stops the developer — who is also the participant and the analyst — from
+stops the developer (who is also the participant and the analyst) from
 gradually believing the system does something it does not.
 """
 
@@ -39,8 +39,8 @@ FORBIDDEN = {
 ALLOWED_FILES = {"test_naming_discipline.py"}
 
 # Prose that explains the ban necessarily contains the banned words. An explicit
-# opt-out marker keeps that legal while making every exemption visible in review
-# — which is the point. Silent exemptions would defeat the whole mechanism.
+# opt-out marker keeps that legal while making every exemption visible in review,
+# which is the point. Silent exemptions would defeat the whole mechanism.
 ESCAPE = "naming-lint: allow"
 
 
@@ -69,7 +69,7 @@ def test_forbidden_vocabulary_absent(pattern: str, reason: str) -> None:
 #: rule exists because an inference about someone else's sleep must never be
 #: stated as fact, and "we played an alarm" is not an inference. Hedging it
 #: would be false modesty and would blur the line the rule is protecting.
-#: Membership here is the reviewed decision — anything making a claim about the
+#: Membership here is the reviewed decision: anything making a claim about the
 #: sleeper belongs above, hedged.
 PROTOCOL_ACTIONS = {"wbtb_wake", "wbtb_resume"}
 
@@ -84,7 +84,7 @@ def test_event_kind_is_closed_and_hedged() -> None:
             f"{kind.value!r} does not hedge. Every observational EventKind must be "
             "qualified: Morpheus reports what it observed, not what it concluded. "
             "If this is an action Morpheus took rather than an inference about the "
-            "sleeper, add it to PROTOCOL_ACTIONS — deliberately."
+            "sleeper, add it to PROTOCOL_ACTIONS: deliberately."
         )
 
 
@@ -120,7 +120,7 @@ def test_event_kind_membership_is_deliberate() -> None:
 
 
 def test_no_video_persistence_in_daemon() -> None:
-    """Structural guarantee behind the privacy claim in design.md §20.
+    """Structural guarantee behind the no-video privacy claim.
 
     No code path may write image data. This asserts the absence of the obvious
     mechanisms; it is a tripwire against accidental reintroduction, not a proof.
@@ -134,7 +134,7 @@ def test_no_video_persistence_in_daemon() -> None:
                 offenders.append(f"{path.relative_to(SRC)}:{lineno}: {line.strip()}")
     assert not offenders, (
         "image-writing call found in the daemon. Morpheus persists derived "
-        "features only (design.md §20).\n" + "\n".join(offenders)
+        "features only.\n" + "\n".join(offenders)
     )
 
 
@@ -143,7 +143,7 @@ def test_every_package_has_a_tracked_init() -> None:
 
     An editable install resolves missing __init__.py via namespace packages, so
     the whole test suite passes while a real wheel silently omits the package.
-    It only surfaces on a fresh clone or a genuine install — i.e. for someone
+    It only surfaces on a fresh clone or a genuine install, i.e. for someone
     else, later.
     """
     import subprocess

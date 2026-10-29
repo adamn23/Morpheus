@@ -2,9 +2,9 @@
 
 This is the highest value-per-unit-effort component in M0, and the one part of
 the camera pipeline that does not depend on the face being visible. It works at
-any pose, in the dark, under blankets, from any angle — which is precisely why
+any pose, in the dark, under blankets, from any angle, which is precisely why
 the recommended architecture gives the camera a gate-and-guard role built on
-motion rather than an eye-tracking role built on hope (design.md §8).
+motion rather than an eye-tracking role built on hope.
 
 From M2 these values feed gates G4 and G5: suppress a cue while the body is
 moving, and detect probable arousal after one.
@@ -27,8 +27,8 @@ class MotionEstimator:
 
     Deliberately simple. Optical flow would give direction as well as
     magnitude, but for the gate-and-guard role only magnitude matters, and
-    frame differencing costs a fraction of the CPU — which is the binding
-    constraint on a passively-cooled laptop running eight hours (design.md §10).
+    frame differencing costs a fraction of the CPU, which is the binding
+    constraint on a passively-cooled laptop running eight hours.
     """
 
     def __init__(self, config: MotionConfig) -> None:

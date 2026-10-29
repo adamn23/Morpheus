@@ -6,7 +6,7 @@ non-significant result would be read as "no effect" when it usually means "not
 enough nights". A posterior distribution says the same thing without the
 false comfort: wide intervals look wide.
 
-The prior is Jeffreys (Beta(0.5, 0.5)) — weakly informative, standard for a
+The prior is Jeffreys (Beta(0.5, 0.5)): weakly informative, standard for a
 proportion, and it behaves sensibly at zero events, which matters when a
 14-night arm may contain no lucid dreams at all.
 
@@ -182,7 +182,7 @@ def format_result(result: AnalysisResult) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add(f"N-of-1 analysis — {result.experiment}")
+    add(f"N-of-1 analysis: {result.experiment}")
     add("=" * 70)
     if not result.prereg_intact:
         add("  !! PRE-REGISTRATION HASH MISMATCH")
@@ -225,7 +225,7 @@ def format_result(result: AnalysisResult) -> str:
             if c.credible_interval_excludes_zero:
                 add("    credible interval excludes zero")
             else:
-                add("    credible interval includes zero — no reliable difference yet")
+                add("    credible interval includes zero: no reliable difference yet")
             add("")
 
     add("Blinding")

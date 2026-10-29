@@ -1,10 +1,9 @@
 """The M0 coverage report.
 
 This produces the single number that decides the shape of the whole project:
-what fraction of a night the eye region is actually available for analysis
-(design.md §28). The thresholds it judges against were fixed in the design
-document before any data existed, precisely so they cannot be renegotiated
-after seeing the answer.
+what fraction of a night the eye region is actually available for analysis.
+The thresholds it judges against were fixed before any data existed, so they
+cannot be renegotiated after seeing the answer.
 
 The breakdown by *reason* matters as much as the headline. A night lost to
 `face_absent` argues for remounting the camera; one lost to `pose_unsuitable`
@@ -19,7 +18,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Optional
 
-# Pre-committed decision gate (design.md §28). Do not tune these to taste.
+# Pre-committed decision gate. Do not tune these to taste.
 GATE_PASS = 0.25
 GATE_FAIL = 0.15
 
@@ -68,15 +67,15 @@ class CoverageReport:
         if self.verdict == "PASS":
             return (
                 "Eye-region coverage clears the gate. The eye-movement branch is worth "
-                "developing in M1 — in shadow mode, with no influence on cue timing."
+                "developing in M1: in shadow mode, with no influence on cue timing."
             )
         if self.verdict == "FAIL":
             return (
-                "Eye-region coverage is below the abandon threshold. Per design.md §23 "
-                "failure condition 2, the camera cannot support eye-based detection for "
-                "this sleeper. Proceed to M2 (scheduled TLR) with the camera as a motion "
-                "guard only, and record H1 as unreachable. This is a valid result, not a "
-                "setback: it was measured in two weeks rather than assumed for four months."
+                "Eye-region coverage is below the abandon threshold. The camera "
+                "cannot support eye-based detection for this sleeper. Proceed to M2 "
+                "(scheduled TLR) with the camera as a motion guard only, and record H1 "
+                "as unreachable. This is a valid result: it was measured in two weeks "
+                "rather than assumed for four months."
             )
         return (
             "Coverage sits between the abandon and proceed thresholds. Do not tune the "
@@ -123,8 +122,8 @@ def analyse_session(conn: sqlite3.Connection, session_id: int) -> CoverageReport
     # Counting seconds overstates badly, and did so in a way that produced two
     # mutually contradictory tables in the same report: a second in which the
     # face was visible for 200ms has a non-NULL yaw_proxy and would be counted
-    # as a full second of "frontal", while the coverage table — which uses the
-    # modal flag — correctly called the same second face_absent. Weighting by
+    # as a full second of "frontal", while the coverage table (which uses the
+    # modal flag) correctly called the same second face_absent. Weighting by
     # the visible fraction makes this table sum to the recorded duration and
     # agree with the headline number.
     posture: dict[str, float] = {}
@@ -149,7 +148,7 @@ def analyse_session(conn: sqlite3.Connection, session_id: int) -> CoverageReport
     # section for a side sleeper: a camera mounted upright sees a side-lying
     # face rotated toward 90 degrees, and general-purpose face detectors are
     # trained overwhelmingly on upright faces. An absence of high-roll
-    # detections — as opposed to a spread across roll — is the signature of the
+    # detections (as opposed to a spread across roll) is the signature of the
     # detector failing on rotated faces rather than of the head being upright.
     roll: dict[str, float] = {}
     for row in conn.execute(
@@ -224,7 +223,7 @@ def format_report(r: CoverageReport) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add(f"Morpheus M0 coverage report — session {r.session_id} (night {r.night_index})")
+    add(f"Morpheus M0 coverage report: session {r.session_id} (night {r.night_index})")
     add("=" * 72)
     add(f"  uuid          {r.uuid}")
     add(f"  started       {r.started_at}")
@@ -288,7 +287,7 @@ def format_report(r: CoverageReport) -> str:
             add("")
             for line in _wrap(
                 "Every detection was near-upright. If you were lying on your side, "
-                "that is not evidence your head was straight — it is the detector "
+                "that is not evidence your head was straight: it is the detector "
                 "failing on rotated faces, since it would otherwise report a spread "
                 "of roll angles. Try rotating the camera 90 degrees so a side-lying "
                 "face presents upright to it, and compare the coverage.",
@@ -299,7 +298,7 @@ def format_report(r: CoverageReport) -> str:
         add("  (no face detected)")
     add("")
 
-    add("DECISION GATE — eye-region usable coverage")
+    add("DECISION GATE: eye-region usable coverage")
     add("=" * 72)
     add(f"  measured          {r.eye_usable_frac * 100:.1f}%")
     add(f"  pass threshold    {GATE_PASS * 100:.0f}%       abandon threshold {GATE_FAIL * 100:.0f}%")

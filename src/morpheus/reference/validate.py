@@ -4,19 +4,18 @@ This module decides whether the eye-movement branch lives or dies, so its
 methodology matters more than its code.
 
 **Held-out nights, never held-out windows.** Consecutive 30-second epochs are
-massively autocorrelated — sleep states persist for tens of minutes. Splitting
+massively autocorrelated: sleep states persist for tens of minutes. Splitting
 randomly across windows lets a model memorise a night's idiosyncrasies and score
 an AUC near 1.0 while being useless on a night it has not seen. This is the
 single easiest way to fool yourself in sleep classification, and it is why
 `GroupKFold` groups by session throughout.
 
-**A pre-committed threshold.** AUC >= 0.70 proceeds, < 0.65 kills the branch
-(design.md §22). Fixed in the design document before any data existed,
-imported here as a constant rather than passed in, so the go/no-go cannot be
+**A pre-committed threshold.** AUC >= 0.70 proceeds, < 0.65 kills the branch.
+Fixed before any data existed and imported here as a constant rather than passed in, so the go/no-go cannot be
 renegotiated by an analyst who has already seen the number.
 
 **A recorded verdict.** The result is written to `validation_results`, and G9
-reads that table. Failing validation is not advisory — the sensor-timed cueing
+reads that table. Failing validation is not advisory: the sensor-timed cueing
 path is inert without a passing row.
 """
 
@@ -30,7 +29,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-# Pre-committed in design.md §22. Do not tune.
+# Pre-committed. Do not tune.
 AUC_PASS = 0.70
 AUC_KILL = 0.65
 MIN_NIGHTS = 5
@@ -168,7 +167,7 @@ def validate(
     ci = _bootstrap_auc_ci(labels, predictions, groups)
 
     # Fit once on everything purely to report coefficient direction. This model
-    # is never evaluated — the AUC above comes from held-out nights only.
+    # is never evaluated: the AUC above comes from held-out nights only.
     full = make_pipeline(
         StandardScaler(), LogisticRegression(max_iter=2000, class_weight="balanced")
     )
@@ -238,7 +237,7 @@ def format_result(result: ValidationResult) -> str:
     lines: list[str] = []
     add = lines.append
 
-    add("H1 validation — camera index vs reference REM")
+    add("H1 validation: camera index vs reference REM")
     add("=" * 70)
     add(f"  reference        {result.reference_source}")
     add(f"  nights           {result.nights_used} ({result.held_out_nights}-fold, grouped by night)")
@@ -249,7 +248,7 @@ def format_result(result: ValidationResult) -> str:
         add(f"  INSUFFICIENT DATA: {result.insufficient}")
         add("")
         add("  No verdict is recorded. G9 stays disabled, which is the correct")
-        add("  behaviour — an unvalidated detector must not influence cue timing.")
+        add("  behaviour: an unvalidated detector must not influence cue timing.")
         return "\n".join(lines)
 
     ci_low, ci_high = result.auc_ci
@@ -274,7 +273,7 @@ def format_result(result: ValidationResult) -> str:
         add("  G9 may now be enabled, and must then be A/B'd against the scheduler")
         add("  before it is trusted to improve anything.")
     elif result.killed:
-        add("  Below the abandon threshold. Per design.md §23, the eye-movement")
+        add("  Below the abandon threshold. The eye-movement")
         add("  branch is finished: keep the camera as a motion guard, publish the")
         add("  negative result, and do not tune until it passes. Tuning against a")
         add("  threshold you have already seen is how noise becomes a finding.")

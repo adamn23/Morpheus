@@ -1,7 +1,7 @@
 """Per-frame signal quality, and detection of the camera being moved.
 
 Quality is not a nicety. For a side sleeper, `signal_unavailable` will be the
-modal state of the night (design.md §11), and the difference between "no eye
+modal state of the night, and the difference between "no eye
 movement was detected" and "nothing could be seen" is the difference between a
 finding and an artefact. This module is what keeps those apart.
 """

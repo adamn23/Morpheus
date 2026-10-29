@@ -1,8 +1,8 @@
 """Core value types shared across the daemon.
 
-Naming discipline (design.md §11) is enforced here rather than by convention:
+Naming discipline is enforced here rather than by convention:
 `EventKind` is a closed enum, and `tests/test_naming_discipline.py` fails the
-build if forbidden vocabulary appears anywhere in the source tree — identifiers
+build if forbidden vocabulary appears anywhere in the source tree: identifiers
 asserting a stage or a confirmed state. Morpheus does not measure sleep stages,
 and the type system should make it awkward to pretend otherwise. See that test
 for the banned list and for the escape marker used by prose that must quote it.
@@ -62,7 +62,7 @@ class Frame:
 
     `t_mono` is the authority for all interval arithmetic; `t_utc` exists only
     for human-readable logging and joining against morning reports. Mixing the
-    two is how a DST transition silently corrupts a night (design.md §8).
+    two is how a DST transition silently corrupts a night.
     """
 
     seq: int
@@ -117,7 +117,7 @@ class MotionObservation:
     """Gross movement energy. Works at any pose, in the dark, under blankets.
 
     This is the camera's highest-value M0 output: it underpins the gate-and-guard
-    role (design.md §12.2 G4/G5), which — unlike eye tracking — does not depend
+    role, which (unlike eye tracking) does not depend
     on the face being visible.
     """
 
@@ -196,7 +196,7 @@ class FeatureFrame:
 
 @dataclass(slots=True)
 class HealthCounters:
-    """Uptime accounting for the M0 acceptance criteria (design.md §28).
+    """Uptime accounting for the M0 acceptance criteria.
 
     A run that quietly drops a third of its frames looks identical to a healthy
     one in the feature table. These counters are what make that visible.

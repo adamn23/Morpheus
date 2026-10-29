@@ -40,7 +40,7 @@ class VisionPipeline:
         self.quality = QualityAssessor(config.quality, config.motion.scene_change_downscale)
         # Injectable so integration tests can substitute a scripted detector.
         # YuNet does not fire on synthetic imagery, so the real detector can
-        # only be exercised against live footage — which is a task for M0 setup
+        # only be exercised against live footage, which is a task for M0 setup
         # with the actual camera, not something the test suite can fake.
         self.presence = presence_detector or PresenceDetector(config.presence)
         self.motion = MotionEstimator(config.motion)
@@ -51,7 +51,7 @@ class VisionPipeline:
         # --- M1, shadow mode -------------------------------------------------
         # These features are computed and logged but may not influence cue
         # timing: G9 is locked behind a passing H1 validation regardless of
-        # whether this is enabled (design.md §8).
+        # whether this is enabled.
         self.eye_enabled = config.eye.enabled
         self.landmarks: Optional[MediaPipeLandmarks] = None
         self.fallback_landmarks: Optional[YuNetLandmarks] = None

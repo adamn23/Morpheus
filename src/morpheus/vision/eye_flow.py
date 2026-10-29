@@ -1,8 +1,8 @@
 """Eye-region flow: the M1 signal, and the reasons to distrust it.
 
 This computes the quantity the whole camera branch is a bet on. It runs in
-shadow mode — logged every night, forbidden from influencing cue timing until
-H1 passes (design.md §8) — and it is written to make its own failure legible
+shadow mode (logged every night, forbidden from influencing cue timing until
+H1 passes) and it is written to make its own failure legible
 rather than to look impressive.
 
 **Registration is the whole game.** An unregistered eye ROI moves whenever the
@@ -15,20 +15,20 @@ is recorded so windows where alignment failed can be discarded rather than
 believed.
 
 **Flow is measured as the coherent component, not the mean magnitude.** This
-cost a failed calibration to learn. Reporting `mean(|v|)` — the average of
-per-pixel flow magnitudes — lets sensor noise add constructively, because every
+cost a failed calibration to learn. Reporting `mean(|v|)` (the average of
+per-pixel flow magnitudes) lets sensor noise add constructively, because every
 pixel receives a random vector and magnitudes never cancel. On a static
 synthetic scene with realistic noise the shipped version reported 0.11 of flow
 where the true motion was exactly zero, and on real footage it produced a
 baseline of 0.2466 that buried a genuine saccade signal 1.6x above it. Measuring
 `|mean(v)|` instead makes incoherent noise cancel while coherent motion survives:
-signal-to-noise improves from 31x to 603x. See docs/m1-instrument-defect.md.
+signal-to-noise improves from 31x to 603x.
 
 **Bilateral correlation is the specificity feature.** Genuine eye movements are
 conjugate: both eyes move together, in the same direction, at the same time.
 Shadows, IR flicker, blanket motion, breathing sway and sensor noise are not
 conjugate. Requiring correlated bilateral activity is the single best defence
-against false positives available without a reference signal — at the cost of
+against false positives available without a reference signal, at the cost of
 needing both eyes visible, which for a side sleeper is a real cost. Unilateral
 values are recorded too, so the trade can be measured rather than assumed.
 """
@@ -95,7 +95,7 @@ class EyeFlowConfig:
     # Flow magnitudes below this are noise at any realistic gain.
     flow_floor: float = 1e-4
     # Off by default. CLAHE lifts contrast in a dark eye region, but it amplifies
-    # sensor noise along with it — measured at roughly 2x the noise floor on a
+    # sensor noise along with it: measured at roughly 2x the noise floor on a
     # static scene. With coherent-flow measurement the contrast boost is not
     # needed, and the extra noise is a straight loss.
     equalize: bool = False
@@ -272,7 +272,7 @@ def _coherent_magnitude(flow: np.ndarray) -> tuple[float, float]:
     Returns (|mean(v)|, |mean(v)| / mean(|v|)).
 
     The first is the measurement: how far the region moved as a whole. The
-    second says how much to trust it — a value near 1 means the pixels agreed on
+    second says how much to trust it: a value near 1 means the pixels agreed on
     a direction, near 0 means they disagreed and the magnitude is noise.
     """
     if flow.size == 0:
@@ -289,7 +289,7 @@ def _conjugate_correlation(left: np.ndarray, right: np.ndarray) -> Optional[floa
 
     The mean flow vector per eye is compared, not the per-pixel fields: what
     matters is whether both eyes translated in the same direction, not whether
-    their internal texture happens to match. Note the horizontal flip — the eyes
+    their internal texture happens to match. Note the horizontal flip: the eyes
     are mirror-imaged about the face midline in image coordinates, so a genuine
     conjugate movement appears as opposite x-components and must be corrected
     before correlating, or every real saccade would score -1.

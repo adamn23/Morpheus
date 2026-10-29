@@ -2,11 +2,11 @@
 
 M0 records and nothing else: no detection, no thresholds, no audio. The only
 question it exists to answer is whether the rig survives a night and whether the
-camera can see anything worth analysing (design.md §28).
+camera can see anything worth analysing.
 
 Failure philosophy throughout: fail *quiet*, never loud. Every error path here
 ends in stopping cleanly and writing down what happened. From M2 the same rule
-governs the cue path, where the stakes are higher — a bug that wakes the sleeper
+governs the cue path, where the stakes are higher: a bug that wakes the sleeper
 is worse than a bug that loses a night.
 """
 
@@ -127,7 +127,7 @@ class Recorder:
                     gap = (last_t_mono, frame.t_mono)
                     self._health.clock_gaps.append(gap)
                     log.warning(
-                        "monotonic gap of %.1f s — process suspended or machine slept; "
+                        "monotonic gap of %.1f s: process suspended or machine slept; "
                         "discarding inter-frame state",
                         gap[1] - gap[0],
                     )

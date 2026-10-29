@@ -282,7 +282,7 @@ def test_positive_control_is_a_desk_segment() -> None:
     """The H1 test must be runnable before any bedside mount exists.
 
     That is what lets the decisive question be answered on a laptop, today, for
-    nothing — rather than waiting on hardware.
+    nothing, rather than waiting on hardware.
     """
     from morpheus.calibration.protocol import SegmentSetup, positive_controls
 
@@ -361,7 +361,7 @@ def test_frame_level_auc_cannot_reach_the_gate() -> None:
 
 
 def test_window_maxima_recovers_the_signal() -> None:
-    """Same data, same signal — only the aggregation changes."""
+    """Same data, same signal: only the aggregation changes."""
     from morpheus.calibration.profile import _auc, window_maxima
 
     pos = _burst_segment(40, duty=0.05, separation=4.0, seed=1)

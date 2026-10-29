@@ -1,7 +1,7 @@
 """Morpheus command line.
 
 M0 surface: `doctor`, `setup-models`, `record`, `report`, `sessions`.
-No cueing commands exist yet, deliberately — audio arrives in M2, after the
+No cueing commands exist yet, deliberately: audio arrives in M2, after the
 safety supervisor and the property-based tests that constrain it.
 """
 
@@ -36,7 +36,7 @@ from .store.feature_store import FeatureStore
 
 app = typer.Typer(
     add_completion=False,
-    help="Morpheus — local-first N-of-1 research platform for lucid-dream cueing.",
+    help="Morpheus: local-first N-of-1 research platform for lucid-dream cueing.",
 )
 
 
@@ -73,9 +73,9 @@ def setup_models(
     licences, and pinning by hash makes provenance explicit and verifiable.
 
     Both models are fetched. YuNet drives M0 presence detection; the MediaPipe
-    landmarker drives M1 eye tracking. Missing the second does not fail loudly —
+    landmarker drives M1 eye tracking. Missing the second does not fail loudly.
     M1 silently degrades to five-point landmarks and stops producing eyelid
-    features — so it is fetched here rather than left to be discovered later.
+    features, so it is fetched here rather than left to be discovered later.
     """
     _setup_logging(False)
     config = MorpheusConfig()
@@ -175,7 +175,7 @@ def doctor(
         typer.echo(f"  face model         present ({model})")
     else:
         typer.secho(
-            f"  face model         MISSING — run `morpheus setup-models`\n"
+            f"  face model         MISSING: run `morpheus setup-models`\n"
             f"                     (recording still works, motion features only)",
             fg=typer.colors.YELLOW,
         )
@@ -207,7 +207,7 @@ def doctor(
         typer.secho(f"  manual exposure    NOT confirmed ({status.detail})", fg=colour)
         ok = ok and allow_auto_exposure
 
-    typer.echo(f"  exposure probe     sampling {probe_seconds:.0f}s — keep the scene still")
+    typer.echo(f"  exposure probe     sampling {probe_seconds:.0f}s: keep the scene still")
     probe = source.probe_exposure_stability(probe_seconds)
     cv = probe.get("cv", float("nan"))
     typer.echo(
@@ -217,7 +217,7 @@ def doctor(
     )
     if cv == cv and cv > 0.02:  # NaN-safe
         typer.secho(
-            "                     luminance is drifting on a static scene — this is the\n"
+            "                     luminance is drifting on a static scene: this is the\n"
             "                     signature of auto-exposure hunting, and it will appear\n"
             "                     as motion in every downstream feature.",
             fg=typer.colors.RED,
@@ -263,7 +263,7 @@ def record(
     notes: Optional[str] = typer.Option(None, help="Free-text note stored with the session."),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ) -> None:
-    """Record a session. Persists derived features only — never video.
+    """Record a session. Persists derived features only: never video.
 
     M0 does no detection and plays no audio. It answers one question: can this
     camera, in this room, see this sleeper's eye region at all?
@@ -291,7 +291,7 @@ def record(
     with SleepPreventer(enabled=prevent) as sleeper:
         if prevent and not sleeper.active:
             typer.secho(f"warning: {sleeper.status}", fg=typer.colors.YELLOW)
-        typer.echo(f"recording up to {hours:.1f} h — Ctrl-C to stop cleanly")
+        typer.echo(f"recording up to {hours:.1f} h: Ctrl-C to stop cleanly")
         try:
             summary = recorder.run(max_hours=hours)
         except FrameSourceError as exc:
@@ -390,7 +390,7 @@ def _check_quality_calibration(source: WebcamSource, config: MorpheusConfig) -> 
     coverage report. The quality gate also gates face detection: frames below
     the floor are skipped before the detector runs. If `min_focus` is tuned for
     daylight and the real IR footage is dimmer and flatter, every frame is
-    rejected, no face is ever detected, and the night reports as zero coverage —
+    rejected, no face is ever detected, and the night reports as zero coverage,
     which looks exactly like the finding M0 exists to make, while actually being
     a misconfiguration. Measuring the distribution before the first overnight
     run is what keeps those two apart.
@@ -442,7 +442,7 @@ def _check_quality_calibration(source: WebcamSource, config: MorpheusConfig) -> 
         f"                     Suggested quality.min_focus for this camera: {suggested}\n"
         f"                     Apply it with:  morpheus doctor --write-config morpheus.json\n"
         f"                     then pass --config morpheus.json to record and report.\n"
-        f"                     Change it now, deliberately — not after seeing a\n"
+        f"                     Change it now, deliberately, not after seeing a\n"
         f"                     disappointing coverage number."
     )
     return False
@@ -459,7 +459,7 @@ def _write_calibrated_config(
     It is still only an interim measure: the probe runs on a lit scene with the
     user awake and present, and an IR bedroom at 03:00 is a very different
     image. The sleep-baseline calibration in M1 is what sets these thresholds
-    from overnight quantiles (design.md §13.2), which is the only version of
+    from overnight quantiles, which is the only version of
     this that is actually principled.
     """
     from .vision.quality import QualityAssessor

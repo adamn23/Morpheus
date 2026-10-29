@@ -3,7 +3,7 @@
 Deliberately structured as a deterministic step function. Time enters only via
 `FeatureFrame.t_mono`, never from `time.monotonic()` inside this class, and
 nothing here performs I/O. That makes a whole night replayable in milliseconds
-and lets the property-based tests explore thousands of event orderings — which
+and lets the property-based tests explore thousands of event orderings: which
 matters, because the invariants this enforces are the ones that keep a sleeping
 person from being woken repeatedly by a bug.
 
@@ -94,9 +94,9 @@ class CueController:
 
         # G9 is locked at construction, deliberately. This is a configuration
         # error, so it should surface before the night starts rather than
-        # degrade silently at 04:00 — the opposite of the runtime rule. There is
+        # degrade silently at 04:00, the opposite of the runtime rule. There is
         # no override flag: the person who would reach for one is precisely the
-        # person the lock exists to protect (design.md §8).
+        # person the lock exists to protect.
         self._sensor_timing = None
         self._activity: Optional[ActivityIndex] = None
         if sensor_timing is not None:
@@ -109,7 +109,7 @@ class CueController:
                 )
             self._sensor_timing = sensor_timing
             self._activity = ActivityIndex(sensor_timing)
-            log.info("sensor-timed cueing ENABLED — %s", auth.reason)
+            log.info("sensor-timed cueing ENABLED: %s", auth.reason)
 
         self._state = CueState.IDLE
         self._history: list[FeatureFrame] = []
@@ -208,8 +208,8 @@ class CueController:
         )
         auth: Authorization = self._supervisor.authorize(frame.t_mono, requested)
         if auth.denied:
-            # The gates and the supervisor disagreed. Not an error — they check
-            # overlapping but distinct things — but worth recording, because a
+            # The gates and the supervisor disagreed. Not an error (they check
+            # overlapping but distinct things) but worth recording, because a
             # persistent disagreement means a gate is miscalibrated.
             self._emit(
                 "cue_denied", frame.t_mono,

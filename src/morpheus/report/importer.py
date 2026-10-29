@@ -5,7 +5,7 @@ collection: it is a pre-intervention baseline that already exists, and it cannot
 be re-created if it is mangled on the way in.
 
 So the design is preview-first. Parsing someone's freeform notes is inherently
-guesswork — dates live in filenames or headings or frontmatter, and lucidity is
+guesswork: dates live in filenames or headings or frontmatter, and lucidity is
 tagged however that person happened to tag it. The importer detects candidates,
 shows exactly what it found, and refuses to write anything until asked. A silent
 mis-parse of a journal that cannot be regenerated is the failure worth designing
@@ -14,8 +14,8 @@ against.
 One honest limitation, worth stating where it will be read: entries written
 before this project existed were not written against the pinned outcome wording
 (report/schema.py). Coding them retrospectively introduces measurement
-inconsistency. The bias runs conservative — over-coding past entries as lucid
-inflates the baseline and makes any later intervention look *worse* — so an
+inconsistency. The bias runs conservative (over-coding past entries as lucid
+inflates the baseline and makes any later intervention look *worse*) so an
 imperfect import is still useful, but the imported nights should be treated as a
 prior, not as data collected under the protocol.
 """
@@ -69,7 +69,7 @@ _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 #: Inline date headers: "June 30:", "Jul 1 -", "December 25:".
 #: A running journal kept as continuous prose marks days this way rather than
-#: with Markdown headings, and almost never writes the year — it is obvious to
+#: with Markdown headings, and almost never writes the year: it is obvious to
 #: the author and invisible to a parser.
 _INLINE_DATE = re.compile(
     r"^[ \t]*"
@@ -88,7 +88,7 @@ _INLINE_DATE = re.compile(
 #: (December to January is -11). Anything smaller is treated as an
 #: out-of-order entry or a typo, because in a journal written most days a
 #: genuine twelve-month gap between consecutive entries is far less likely
-#: than a slip of the pen — and the cost of guessing wrong is every
+#: than a slip of the pen, and the cost of guessing wrong is every
 #: subsequent entry landing a year out.
 _ROLLOVER_MIN_DECREASE = 6
 
@@ -143,11 +143,11 @@ def _normalise_date(raw: tuple, kind: str) -> Optional[str]:
         elif kind == "dmy":
             first, second, y = int(raw[0]), int(raw[1]), int(raw[2])
             # Ambiguous by nature. Prefer D/M when the first field cannot be a
-            # month, otherwise fall back to M/D and accept the uncertainty —
+            # month, otherwise fall back to M/D and accept the uncertainty:
             # the preview shows parsed dates so a systematic error is visible.
             d, m = (first, second) if first > 12 else (second, first)
         else:
-            # "6 August 2026" or "August 6, 2026" — the day sits on either side
+            # "6 August 2026" or "August 6, 2026": the day sits on either side
             # of the month name, so whichever group matched is the day.
             day = raw[0] or raw[2]
             month = _month_lookup(raw[1])
@@ -232,7 +232,7 @@ def split_dated_prose(
     """Split a continuous prose journal on inline date headers.
 
     Returns ((iso_date, body) pairs, warnings). Anything before the first
-    header — a title, a "Prev: June 10-29" note — is discarded.
+    header (a title, a "Prev: June 10-29" note) is discarded.
 
     Handles both shapes seen in real journals: a bare "June 30:" with the year
     implied, and a fuller "Tuesday Feb. 4 2025 -" with the year written out. An
@@ -243,7 +243,7 @@ def split_dated_prose(
     Small backwards steps are treated as typos rather than year boundaries, and
     both they and genuine rollovers are reported. A real journal contained
     "June 7:" between "July 6:" and "July 8:", which under a naive rule shifted
-    thirteen entries into the following year — silently, because every date
+    thirteen entries into the following year: silently, because every date
     after it was individually plausible.
     """
     matches = list(_INLINE_DATE.finditer(text))
@@ -276,7 +276,7 @@ def split_dated_prose(
                 candidate_year = year
                 warnings.append(
                     f"out of order: {match.group(0).strip()} follows month "
-                    f"{previous_month:02d}. Kept in {year} as a likely typo — "
+                    f"{previous_month:02d}. Kept in {year} as a likely typo: "
                     f"check it."
                 )
         else:
@@ -311,7 +311,7 @@ def split_dated_prose(
 #: A journal that writes "Wake up" between two dreams of the same night would
 #: otherwise have that line counted as a third dream.
 #: Kept deliberately narrow. An earlier version also listed "second dream",
-#: "next dream" and "later", which match ordinary dream text — a paragraph
+#: "next dream" and "later", which match ordinary dream text: a paragraph
 #: reading "Second dream." was deleted as a separator, and the count came back
 #: lower than before the fix. A separator must be a phrase nobody would write
 #: as the content of a dream.
@@ -409,7 +409,7 @@ def scan(path: Path, *, base_year: Optional[int] = None) -> ImportPreview:
                 )
             continue
 
-        # A file containing several dated headings holds several entries — the
+        # A file containing several dated headings holds several entries: the
         # common shape when a notes app exports a whole journal as one document.
         # A per-day export instead gets its date from the filename.
         chunks = _split_combined(text)
@@ -483,7 +483,7 @@ def format_preview(preview: ImportPreview, limit: int = 3) -> str:
         add("")
 
     if preview.warnings:
-        add("Warnings — check these before importing")
+        add("Warnings: check these before importing")
         add("-" * 68)
         for warning in preview.warnings[:20]:
             for line in _wrap(warning, 66):

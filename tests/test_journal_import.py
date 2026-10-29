@@ -408,7 +408,7 @@ def test_explicit_year_overrides_the_carried_year() -> None:
 def test_small_backwards_step_is_a_typo_not_a_year_boundary() -> None:
     """The failure that would have misdated thirteen real entries.
 
-    'June 7:' sat between 'July 6:' and 'July 8:' — plainly a slip for July 7.
+    'June 7:' sat between 'July 6:' and 'July 8:', plainly a slip for July 7.
     A naive rule rolled the year and shifted everything after it into 2027,
     silently, because each following date was individually plausible.
     """
@@ -446,7 +446,7 @@ def test_baseline_stats_distinguish_unscored_from_zero(conn) -> None:
 
     Imported entries carry no lucidity value unless they were tagged, so a
     freshly imported journal has nothing scored. Reporting that as a rate of
-    zero would be presenting absent data as a finding — and it would be the
+    zero would be presenting absent data as a finding, and it would be the
     baseline the whole N-of-1 comparison is measured against.
     """
     store = ReportStore(conn)

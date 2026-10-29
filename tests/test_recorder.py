@@ -2,7 +2,7 @@
 
 Every failure mode here is one that will actually happen during an overnight
 run: a USB camera resetting, a laptop suspending, a disk filling, a process
-being killed. The invariant under test is always the same — Morpheus stops
+being killed. The invariant under test is always the same: Morpheus stops
 cleanly and writes down what happened. It never dies loudly, and it never
 silently produces data that looks fine.
 """

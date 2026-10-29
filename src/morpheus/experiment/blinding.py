@@ -20,10 +20,10 @@ two things that *are* achievable:
 The third mechanism is procedural and lives in `assignments.py`: the reveal path
 refuses to unseal a night until a morning report exists for it. Combined with
 the `guessed_condition` field on every report, that gives an empirical handle on
-how often blinding actually held (design.md §15.2).
+how often blinding actually held.
 
 If genuine blinding is ever needed, the honest route is a passphrase held by
-someone else — not a better cipher on the participant's own disk.
+someone else, not a better cipher on the participant's own disk.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def load_or_create_key(data_dir: Path) -> bytes:
 def _keystream(key: bytes, nonce: str, length: int) -> bytes:
     """HMAC-SHA256 in counter mode.
 
-    Sufficient for the stated goal — making the value unreadable at a glance —
+    Sufficient for the stated goal (making the value unreadable at a glance)
     and dependency-free. It is not authenticated encryption and is not
     presented as such.
     """

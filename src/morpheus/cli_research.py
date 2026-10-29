@@ -293,7 +293,7 @@ def validate_cmd(
         record_validation(conn, result)
         typer.secho("\nverdict recorded", fg=typer.colors.GREEN)
     elif commit:
-        typer.secho("\nnot recorded — insufficient data for a verdict", fg=typer.colors.YELLOW)
+        typer.secho("\nnot recorded: insufficient data for a verdict", fg=typer.colors.YELLOW)
     conn.close()
 
 

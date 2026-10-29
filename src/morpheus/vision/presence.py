@@ -6,7 +6,7 @@ than a full 478-point mesh. That is a deliberate scope choice: M0 asks only
 localise the eyes, estimate a roll-invariant yaw proxy, and measure interocular
 resolution. MediaPipe's mesh arrives in M1, when the question becomes "can the
 eyelid be measured", and it is expected to degrade badly on closed eyes and IR
-monochrome (design.md §4.2).
+monochrome.
 
 If the model file is absent the detector reports itself unavailable rather than
 raising. Motion features do not depend on it, and a night of motion-only data is
@@ -91,7 +91,7 @@ class PresenceDetector:
             return ABSENT
 
         # Largest face by area. A bed partner would break this assumption, but
-        # the recorder refuses multi-person scenes at framing check (design.md §20).
+        # the recorder refuses multi-person scenes at framing check.
         face = max(faces, key=lambda f: float(f[2]) * float(f[3]))
         inv = 1.0 / scale
         return self._observe(face, inv)
@@ -136,7 +136,7 @@ def _yaw_proxy(
     The nose tip sits midway between the eyes on a frontal face. As the head
     turns, it projects toward the nearer eye. Measuring that offset *along the
     interocular axis* and normalising by interocular distance makes the result
-    invariant to both head roll and distance from the camera — which matters,
+    invariant to both head roll and distance from the camera, which matters,
     because a sleeper's head rolls constantly and the camera distance is fixed
     but unknown.
 
@@ -164,7 +164,7 @@ def classify_coverage(
     meaningful: the returned flag is the *first* disqualifying reason, and the
     distribution of reasons across a night is what tells you whether to remount
     the camera, buy a better sensor, or abandon the eye-tracking branch
-    entirely (design.md §23).
+    entirely.
     """
     if not presence.detector_available:
         return CoverageFlag.NO_DETECTOR

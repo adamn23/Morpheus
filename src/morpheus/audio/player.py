@@ -7,7 +7,7 @@ head. It is written accordingly.
 Three invariants are enforced *here*, in the rendering path, rather than being
 left to the caller's discipline:
 
-  1. Output amplitude never exceeds the configured ceiling. Not "should not" —
+  1. Output amplitude never exceeds the configured ceiling. Not "should not":
      the buffer is clipped after gain is applied, so a caller that asks for
      more than the ceiling gets the ceiling.
   2. Every cue ramps up from silence. Abrupt onset is the primary mechanism by
@@ -57,7 +57,7 @@ class RenderedCue:
     """A cue buffer plus the exact parameters that produced it.
 
     Recorded before playback begins, so that a crash mid-cue still leaves an
-    attributable record of what was played (design.md §12.3).
+    attributable record of what was played.
     """
 
     samples: np.ndarray
@@ -93,7 +93,7 @@ class BufferSink:
 class SoundDeviceSink:
     """Real output via PortAudio.
 
-    Imported lazily so the rest of Morpheus — and the whole test suite — works
+    Imported lazily so the rest of Morpheus (and the whole test suite) works
     on a machine with no audio stack at all.
     """
 
@@ -142,7 +142,7 @@ class CuePlayer:
 
     The ceiling is set once at construction from calibrated configuration and
     is not settable afterwards. Adaptive policy adjusts `gain`; it has no route
-    to `ceiling`, which is the point (design.md §12.5).
+    to `ceiling`, which is the point.
     """
 
     def __init__(

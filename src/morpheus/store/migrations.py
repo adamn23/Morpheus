@@ -1,8 +1,8 @@
 """Versioned schema migrations, applied via PRAGMA user_version.
 
-Only the tables M0 actually writes are created here. The remaining tables from
-design.md §16 (cues, reports, experiments, assignments, ...) arrive in their own
-migrations as those phases land — creating twelve empty tables now would be
+Only the tables M0 actually writes are created here. The remaining tables
+(cues, reports, experiments, assignments, ...) arrive in their own
+migrations as those phases land: creating twelve empty tables now would be
 speculation dressed up as planning.
 
 The `frames_1hz` columns are the exception: the later-phase feature columns are
@@ -63,7 +63,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
 
         -- One row per second. ~28,800 rows/night; trivial for SQLite.
-        -- NO PIXEL DATA IS EVER STORED HERE OR ANYWHERE ELSE (design.md §20).
+        -- NO PIXEL DATA IS EVER STORED HERE OR ANYWHERE ELSE.
         CREATE TABLE frames_1hz (
             session_id             INTEGER NOT NULL REFERENCES sessions(id),
             t_mono                 REAL    NOT NULL,
@@ -125,7 +125,7 @@ MIGRATIONS: list[tuple[int, str]] = [
 
         -- Cue audio, hashed. The trained/untrained distinction is the basis of
         -- the experiment's control arm, so it must be a recoverable fact rather
-        -- than an operator's assertion (design.md §15.1).
+        -- than an operator's assertion.
         CREATE TABLE cue_assets (
             id         INTEGER PRIMARY KEY,
             name       TEXT    NOT NULL,
@@ -153,7 +153,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX idx_events_session ON events(session_id, t_mono);
 
         -- One row per cue, written BEFORE audio starts so that a crash
-        -- mid-playback still leaves an attributable record (design.md §12.3).
+        -- mid-playback still leaves an attributable record.
         CREATE TABLE cues (
             id                INTEGER PRIMARY KEY,
             session_id        INTEGER NOT NULL REFERENCES sessions(id),
@@ -189,7 +189,7 @@ MIGRATIONS: list[tuple[int, str]] = [
 
         -- Pre-sleep / WBTB conditioning. Adherence is a covariate in every
         -- analysis and the most likely alternative explanation for a positive
-        -- result, so it is measured rather than assumed (design.md §14).
+        -- result, so it is measured rather than assumed.
         CREATE TABLE training_sessions (
             id                INTEGER PRIMARY KEY,
             session_id        INTEGER REFERENCES sessions(id),
@@ -205,7 +205,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         );
 
         -- Morning report. Narrative is the primary outcome's raw material and
-        -- is treated as sensitive throughout (design.md §20).
+        -- is treated as sensitive throughout.
         CREATE TABLE reports (
             id                INTEGER PRIMARY KEY,
             session_id        INTEGER REFERENCES sessions(id),
@@ -329,7 +329,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (
         4,
         """
-        -- Waking calibration (design.md §13.1). The positive_control_auc column
+        -- Waking calibration. The positive_control_auc column
         -- is the M1 go/no-go: deliberate closed-eye saccades versus closed-eye
         -- stillness, measured in one session on one face under one lighting.
         CREATE TABLE calibration_profiles (
@@ -347,7 +347,7 @@ MIGRATIONS: list[tuple[int, str]] = [
             notes_json           TEXT
         );
 
-        -- Audio loudness calibration (design.md §13.3), by ascending limits.
+        -- Audio loudness calibration, by ascending limits.
         -- Absolute SPL at the pillow is unknown without a meter, so these are
         -- digital gains anchored to the user's own judgement.
         CREATE TABLE audio_calibrations (
@@ -368,7 +368,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         -- Raw per-frame calibration samples.
         --
         -- Previously only summary statistics were kept, so diagnosing a failed
-        -- calibration required running a whole new session — which happened
+        -- calibration required running a whole new session, which happened
         -- twice, and the second time the data needed to check a validity
         -- criterion had already been discarded. A three-minute session produces
         -- a few thousand rows; keeping them is free.

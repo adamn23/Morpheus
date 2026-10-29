@@ -41,7 +41,7 @@ from .types import EventKind, HealthCounters
 log = logging.getLogger("morpheus.cli")
 
 #: Ceiling for the WBTB alarm. Far above the cue ceiling on purpose: the alarm's
-#: job is the opposite of a cue's. It is still a ceiling, not a volume — the
+#: job is the opposite of a cue's. It is still a ceiling, not a volume: the
 #: requested alarm gain sits below it.
 ALARM_CEILING = 0.95
 
@@ -71,7 +71,7 @@ def _resolve_arm(conn, config, registry, asset, today: str, session_id: Optional
     """Bind tonight's sealed arm to the cue that will actually play.
 
     Returns `(asset, plays_audio, assignment_id)`. When no experiment is running
-    this is a no-op and the caller's chosen asset stands — which is Phase A, the
+    this is a no-op and the caller's chosen asset stands, which is Phase A, the
     unrandomised phase.
 
     The arm is read through `arm_for_running_night`, which audits the read as
@@ -94,7 +94,7 @@ def _resolve_arm(conn, config, registry, asset, today: str, session_id: Optional
         return asset, False, assignment_id
     if arm is Arm.UNTRAINED_CUE:
         # The matched twin: same timbre, note count, duration and register,
-        # differing only in contour — and never conditioned. If the pairing is
+        # differing only in contour, and never conditioned. If the pairing is
         # missing this raises rather than substituting something unmatched.
         return registry.matched_control_for(asset), True, assignment_id
     return asset, True, assignment_id
@@ -104,7 +104,7 @@ def _last_night(conn) -> dict:
     """What the most recent cueing session did, for the morning questions.
 
     Used to ask about WBTB only on nights that had one, and to tell the user how
-    many cues actually fired — without revealing the experimental arm, which the
+    many cues actually fired, without revealing the experimental arm, which the
     blinding depends on staying sealed until after the report.
     """
     row = conn.execute(
@@ -155,7 +155,7 @@ def _wbtb_script(kind: str, awake_min: float):
 
     Kept short by design: sleep latency after the technique is one of only two
     replicated predictors of success (Aspy 2017), so a long script works against
-    the thing that most reliably helps. The user may finish early with Enter —
+    the thing that most reliably helps. The user may finish early with Enter:
     going back to sleep promptly matters more than completing every step.
     """
     def run(_awake_min: float) -> None:
@@ -163,7 +163,7 @@ def _wbtb_script(kind: str, awake_min: float):
         deadline = time.monotonic() + awake_min * 60.0
         typer.echo("")
         typer.secho(
-            f"  WBTB — {kind}, {total_seconds(kind) / 60:.0f} min of script, "
+            f"  WBTB: {kind}, {total_seconds(kind) / 60:.0f} min of script, "
             f"~{awake_min:.0f} min awake at most.",
             bold=True,
         )
@@ -174,16 +174,16 @@ def _wbtb_script(kind: str, awake_min: float):
             for index, step in enumerate(steps, start=1):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    typer.echo("\n  time limit reached — back to sleep.")
+                    typer.echo("\n  time limit reached: back to sleep.")
                     break
                 typer.secho(f"  [{index}/{len(steps)}] {step.title}", bold=True)
                 typer.echo(f"      {step.body}")
                 # Each step self-advances after its own duration, so the script
-                # completes even if you drift off holding the intention — which
+                # completes even if you drift off holding the intention: which
                 # is the intended way to finish it, not a failure.
                 _wait_for_enter(min(float(step.seconds), max(0.0, deadline - time.monotonic())))
         except KeyboardInterrupt:
-            typer.echo("\n  script ended early — going back to sleep is the priority.")
+            typer.echo("\n  script ended early: going back to sleep is the priority.")
         typer.echo("  Back to sleep. Cues resume shortly.\n")
 
     return run
@@ -226,7 +226,7 @@ def phase_cmd(
 
     if enter is None:
         typer.echo(f"\nProtocol phase: {state.phase} "
-                   f"({'VALIDATE — randomised' if state.is_validating else 'MAX LD — tuning'})")
+                   f"({'VALIDATE: randomised' if state.is_validating else 'MAX LD: tuning'})")
         typer.echo(f"  Phase A nights so far   {phase_mod.phase_a_nights(conn)}")
         if state.frozen:
             typer.echo(f"  frozen at               {state.frozen_at}")
@@ -248,7 +248,7 @@ def phase_cmd(
     choice = enter.strip().lower()
     if choice == "a":
         phase_mod.return_to_a(conn)
-        typer.secho("back in Phase A — tuning allowed, nights are not trial data.",
+        typer.secho("back in Phase A: tuning allowed, nights are not trial data.",
                     fg=typer.colors.GREEN)
         conn.close()
         return
@@ -363,7 +363,7 @@ def train(
     """Run the conditioning protocol.
 
     This is the part of Morpheus with published efficacy behind it. The cue is
-    inert without it — the sound works because it has been bound to a state of
+    inert without it: the sound works because it has been bound to a state of
     critical self-awareness beforehand.
     """
     if kind not in TRAINING_KINDS:
@@ -399,7 +399,7 @@ def train(
     player = CuePlayer(SoundDeviceSink(), ceiling=SafetyLimits().max_gain)
     waveform, _ = load_wav(asset.path)
 
-    typer.echo(f"\nMorpheus conditioning — {kind}")
+    typer.echo(f"\nMorpheus conditioning: {kind}")
     typer.echo(f"cue: {asset.name}   approx {total_seconds(kind) // 60} min   Ctrl-C to abort")
     typer.echo("=" * 68)
 
@@ -426,7 +426,7 @@ def train(
             if step.kind is StepKind.INPUT and step.capture:
                 captured[step.capture] = typer.prompt("  >", default="", show_default=False)
             else:
-                typer.echo(f"  ({step.seconds}s — press Enter when done)")
+                typer.echo(f"  ({step.seconds}s: press Enter when done)")
                 input()
             completed_steps[step.key] = True
     except KeyboardInterrupt:
@@ -533,14 +533,14 @@ def night(
     if recent_training is None:
         typer.secho(
             "No completed conditioning session on record.\n"
-            "An unconditioned cue is just a noise in the night — the published effect "
+            "An unconditioned cue is just a noise in the night: the published effect "
             "comes from the pairing. Run `morpheus train` first.",
             fg=typer.colors.YELLOW,
         )
         if not typer.confirm("Continue anyway?", default=False):
             raise typer.Exit(1)
 
-    # Design.md §23 stopping rule, enforced before arming rather than during
+    # Stopping rule, enforced before arming rather than during
     # the night. Halting a study is a decision made awake with the numbers in
     # front of you, not something to discover at 04:00.
     quality = check_sleep_quality(conn)
@@ -653,20 +653,20 @@ def night(
 
     typer.echo("")
     typer.echo(f"  phase          {phase_state.phase} "
-               f"({'VALIDATE — this night is trial data' if phase_state.is_validating else 'MAX LD — tuning, not trial data'})")
+               f"({'VALIDATE: this night is trial data' if phase_state.is_validating else 'MAX LD: tuning, not trial data'})")
     if deviations:
         # Not blocked. A deviating night is still a night; what matters is that
         # the deviation is on the record rather than discovered during analysis
         # months later, or never.
-        typer.secho("  PROTOCOL DRIFT — this night differs from the frozen protocol:",
+        typer.secho("  PROTOCOL DRIFT. This night differs from the frozen protocol:",
                     fg=typer.colors.RED, bold=True)
         for d in deviations:
             typer.secho(f"    {d}", fg=typer.colors.RED)
     if blinded:
-        typer.echo("  cue            [blinded — sealed until after tomorrow's report]")
+        typer.echo("  cue            [blinded: sealed until after tomorrow's report]")
     else:
         typer.echo(f"  cue            {asset.name} ({'TRAINED' if asset.trained else 'CONTROL'})")
-    typer.echo(f"  mode           {'DRY RUN — no audio' if dry_run else 'AUDIO ARMED'}")
+    typer.echo(f"  mode           {'DRY RUN: no audio' if dry_run else 'AUDIO ARMED'}")
     typer.echo(f"  sensing        {'camera' if camera else 'clock only'}")
     typer.echo(f"  first cue      after {limits.min_delay_s / 3600:.1f} h")
     typer.echo(f"  caps           {limits.max_cues_per_night}/night, {limits.max_cues_per_hour}/hour, "
@@ -677,8 +677,8 @@ def night(
     typer.echo(f"  stop           Ctrl-C, or turn the speaker off")
 
     # Pre-flight: can a cue fire at all tonight? The window is bounded at both
-    # ends — nothing before min_delay, nothing within stop_before_wake of the
-    # deadline — and it is entirely possible to configure a run where those
+    # ends (nothing before min_delay, nothing within stop_before_wake of the
+    # deadline) and it is entirely possible to configure a run where those
     # overlap. Discovering that from a silent zero-cue summary the next morning
     # wastes a night; saying so now costs nothing.
     if wbtb_plan is not None:
@@ -718,15 +718,15 @@ def night(
 
     # Ctrl-C is documented above as the way to stop a night, so it has to end
     # the run through the normal path. Left to the default handler it raises
-    # KeyboardInterrupt — a BaseException, so the runner's `except Exception`
-    # does not see it — and the session row stays at status='running' with no
+    # KeyboardInterrupt (a BaseException, so the runner's `except Exception`
+    # does not see it) and the session row stays at status='running' with no
     # end time, no summary, and no defect flag. That is precisely the silent
     # artefact the defect reporting exists to prevent. Ask the loop to stop
     # instead; a second signal falls through to the default and hard-exits.
     previous: dict[int, object] = {}
 
     def _on_signal(signum: int, _frame: object) -> None:
-        typer.echo("\n  stopping cleanly — finishing the session record...")
+        typer.echo("\n  stopping cleanly: finishing the session record...")
         signal.signal(signum, previous.get(signum, signal.SIG_DFL))  # type: ignore[arg-type]
         runner.request_stop()
 
@@ -781,7 +781,7 @@ def night(
     defects = summary.defects()
     if defects:
         typer.echo("")
-        typer.secho("  DEFECTIVE NIGHT — do not analyse as a clean observation:",
+        typer.secho("  DEFECTIVE NIGHT: do not analyse as a clean observation:",
                     fg=typer.colors.RED, bold=True)
         for defect in defects:
             typer.secho(f"    - {defect}", fg=typer.colors.RED)
@@ -831,7 +831,7 @@ def journal(
 
     target = for_date or ((date.today() - timedelta(days=1)).isoformat() if yesterday else today_str())
 
-    typer.echo(f"\nMorning report — {target}")
+    typer.echo(f"\nMorning report: {target}")
     typer.echo("=" * 68)
     typer.echo("Write freely. Fragments are fine and are worth more than nothing.\n")
 
@@ -933,7 +933,7 @@ def baseline(config_path: Optional[Path] = typer.Option(None, "--config")) -> No
         # data must not be reported as a finding.
         typer.secho(
             "\n  No entries have been scored for lucidity yet, so there is no\n"
-            "  baseline rate — this is NOT a rate of zero.\n\n"
+            "  baseline rate: this is NOT a rate of zero.\n\n"
             "  Imported journals carry no lucidity value unless they were tagged.\n"
             "  Score them with:  morpheus review",
             fg=typer.colors.YELLOW,
@@ -1007,8 +1007,8 @@ def import_journal(
 ) -> None:
     """Import an existing dream journal.
 
-    Preview-first by design. Parsing freeform notes is guesswork — dates live in
-    filenames or headings, lucidity is tagged however you happened to tag it —
+    Preview-first by design. Parsing freeform notes is guesswork (dates live in
+    filenames or headings, lucidity is tagged however you happened to tag it)
     and a journal you cannot regenerate is the wrong thing to mangle silently.
     Nothing is written until you pass --commit.
     """
@@ -1038,7 +1038,7 @@ def import_journal(
 
     if not commit:
         typer.echo("")
-        typer.secho("Preview only — nothing written. Re-run with --commit to import.",
+        typer.secho("Preview only: nothing written. Re-run with --commit to import.",
                     fg=typer.colors.YELLOW)
         return
 
@@ -1232,7 +1232,7 @@ def calibrate(
         raise typer.Exit(1)
 
     runner = CalibrationRunner(config, source)
-    typer.echo(f"\nMorpheus calibration — stage '{stage}', {len(chosen)} segments, "
+    typer.echo(f"\nMorpheus calibration: stage '{stage}', {len(chosen)} segments, "
                f"about {duration // 60}m{duration % 60:02d}s")
     typer.echo("=" * 68)
     for line in _wrap(STAGE_GUIDANCE.get(stage, ""), 66):
@@ -1278,7 +1278,7 @@ def calibrate(
 
 
 def _calibrate_audio(conn, config: MorpheusConfig) -> None:
-    """Ascending-limits loudness calibration (design.md §13.3).
+    """Ascending-limits loudness calibration.
 
     Absolute SPL at the pillow is unknowable without a meter, so this anchors
     digital gain to the user's own judgement. Ascending order matters: starting
@@ -1305,7 +1305,7 @@ def _calibrate_audio(conn, config: MorpheusConfig) -> None:
     typer.echo("=" * 68)
     typer.echo("  Set your speaker where it will sit overnight, at the volume you")
     typer.echo("  will leave it at. Lie in your normal sleeping position. Everything")
-    typer.echo("  below is relative to that physical setup — change the speaker or")
+    typer.echo("  below is relative to that physical setup: change the speaker or")
     typer.echo("  its knob afterwards and this calibration is void.\n")
     input("  press Enter when ready")
 
@@ -1314,7 +1314,7 @@ def _calibrate_audio(conn, config: MorpheusConfig) -> None:
         if gain > limits.max_gain:
             break
         player.play(player.render(waveform, gain=gain, ramp_ms=1200, duration_ms=None))
-        if typer.confirm(f"  gain {gain:.2f} — could you hear it?", default=False):
+        if typer.confirm(f"  gain {gain:.2f}: could you hear it?", default=False):
             faintest = gain
             break
 
@@ -1322,7 +1322,7 @@ def _calibrate_audio(conn, config: MorpheusConfig) -> None:
         typer.secho(
             "\n  Not audible even at the ceiling. Turn the speaker up, or move it\n"
             "  closer, and run this again. Do NOT raise the software ceiling to\n"
-            "  compensate — it exists to bound what a bug can do.",
+            "  compensate: it exists to bound what a bug can do.",
             fg=typer.colors.RED,
         )
         return
@@ -1333,7 +1333,7 @@ def _calibrate_audio(conn, config: MorpheusConfig) -> None:
         if gain > limits.max_gain:
             break
         player.play(player.render(waveform, gain=gain, ramp_ms=1200, duration_ms=None))
-        if not typer.confirm(f"  gain {gain:.2f} — still comfortable to sleep through?", default=True):
+        if not typer.confirm(f"  gain {gain:.2f}: still comfortable to sleep through?", default=True):
             break
         comfortable = gain
 
@@ -1416,7 +1416,7 @@ def review_cmd(
 
     config = MorpheusConfig.load(config_path)
     if not config.storage.db_path.exists():
-        typer.secho("no database yet — import your journal first", fg=typer.colors.RED)
+        typer.secho("no database yet: import your journal first", fg=typer.colors.RED)
         raise typer.Exit(1)
 
     conn = open_db(config.storage.db_path)
@@ -1465,7 +1465,7 @@ def review_cmd(
                 typer.echo("")
                 for number, dream, hints in relevant:
                     typer.secho(
-                        f"  dream {number}/{len(dreams)} — {', '.join(hints)}",
+                        f"  dream {number}/{len(dreams)}: {', '.join(hints)}",
                         fg=typer.colors.YELLOW,
                     )
                     for line in _wrap(evidence_snippet(dream), 66):

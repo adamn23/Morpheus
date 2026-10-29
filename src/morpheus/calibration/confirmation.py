@@ -1,8 +1,8 @@
 """Frozen confirmation analysis for the lid-geometry finding.
 
 **This module is committed before the confirmation data exists and must not be
-edited afterwards.** Everything in it — the primary measure, the motion gate,
-the validity checks, the pass rule — is fixed here so that the verdict is a
+edited afterwards.** Everything in it (the primary measure, the motion gate,
+the validity checks, the pass rule) is fixed here so that the verdict is a
 function of the data alone. If a future change is genuinely warranted, it
 belongs in a new module with a new pre-registration, not in an edit to this one.
 
@@ -33,7 +33,7 @@ guards against the small sample that produced the original number.
 
 ## The pose confound, stated plainly
 
-Lid displacement responded to deliberate head turns at AUC 0.988 — *more*
+Lid displacement responded to deliberate head turns at AUC 0.988: *more*
 strongly than to saccades at 0.883. On its own the channel measures "the eye
 region changed", not "the eyes moved". It looked clean only because every
 head-turn window exceeded the motion gate and was discarded.
@@ -79,10 +79,10 @@ MOTION_GATE_PERCENTILE = 90.0
 MIN_POSITIVE_WINDOWS = 20
 MIN_BASELINE_WINDOWS = 15
 
-#: L1 — the motion gate must actually remove large head movement.
+#: L1: the motion gate must actually remove large head movement.
 MIN_HEAD_TURN_EXCLUSION = 0.80
 
-#: L2 — small, sleep-like head movement must not look like eye movement.
+#: L2: small, sleep-like head movement must not look like eye movement.
 #: Evaluated only if enough micro-motion windows survive the gate; if the gate
 #: removes them too, L2 is satisfied through L1.
 MIN_MICRO_WINDOWS_FOR_L2 = 10
@@ -272,7 +272,7 @@ def confirm(collected: dict[str, list[dict]]) -> ConfirmationResult:
 def format_result(result: ConfirmationResult, *, reference_auc: float = 0.909) -> str:
     lines: list[str] = []
     add = lines.append
-    add("Lid-geometry confirmation — frozen criteria")
+    add("Lid-geometry confirmation: frozen criteria")
     add("=" * 70)
     add(f"  primary channel   {PRIMARY_CHANNEL}, {WINDOW_S:.0f}s window maxima")
     add(f"  pass rule         95% CI lower bound >= {CI_LOWER_BOUND_REQUIRED}")
